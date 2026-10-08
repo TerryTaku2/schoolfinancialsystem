@@ -238,8 +238,17 @@ def create_app(config_object="config.Config"):
     @app.get("/")
     def index():
         if multi and not current_school():
-            return render_template("landing.html", error=None)
+            from .landing import render_home
+            return render_home()  # the public front page
         return render_template("index.html", school_name=school_name())
+
+    @app.get("/login")
+    def find_school_login():
+        """Sign in without knowing the school's address: the credentials find the school."""
+        if not multi or current_school():
+            from flask import redirect
+            return redirect(request.script_root + "/")
+        return render_template("landing.html", error=None)
 
     with app.app_context():
         if multi:

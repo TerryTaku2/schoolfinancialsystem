@@ -213,7 +213,7 @@ def resolve_school():
     slug = request.environ.get("school.slug")
     multi = current_app.config.get("MULTI_SCHOOL")
     if slug is None:
-        if multi and not (request.path in ("/", "/sw.js", "/manifest.webmanifest", "/api/auth/find-school") or request.path.startswith(("/platform", "/static/"))):
+        if multi and not (request.path in ("/", "/login", "/sw.js", "/manifest.webmanifest", "/api/auth/find-school") or request.path.startswith(("/platform", "/static/"))):
             return _not_found("Open your school's own address, for example /s/your-school-code/")
         return None
     if not multi:

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ brand }} · {{ tagline }}</title>
+  <meta name="description" content="{{ brand }}: fees, payments, ZIMRA payroll, accounts, academics and library for primary and secondary schools in Zimbabwe. USD and ZiG side by side; works on phones and computers.">
+  <meta name="theme-color" content="#2a78d6">
+  <link rel="icon" href="{{ root }}/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ root }}/static/css/app.css">
+  <script>
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <style>
+    body { background: var(--bg); color: var(--text); margin: 0; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+    a { color: inherit; }
+    .h-top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+    .h-top .wrap { display: flex; align-items: center; gap: 12px; height: 64px; }
+    .mark { width: 36px; height: 36px; border-radius: 9px; background: var(--accent); color: #fff; display: grid; place-items: center; flex: none; }
+    .mark svg { width: 22px; height: 22px; fill: currentColor; }
+    .h-brand { font-weight: 700; font-size: 17px; text-decoration: none; display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .h-brand span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .h-top .spacer { flex: 1; }
+    .btn.lg { height: 46px; padding: 0 22px; font-size: 15.5px; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+    .btn.wa { background: #1c8d4c; border-color: #1c8d4c; color: #fff; }
+    .btn.wa:hover { background: #167a40; }
+    .hero { padding: 64px 0 40px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 48px; align-items: center; }
+    .eyebrow { display: inline-block; font-size: 13px; font-weight: 600; color: var(--accent-strong); background: var(--accent-soft); padding: 5px 12px; border-radius: 99px; margin-bottom: 18px; }
+    .hero h1 { font-size: clamp(32px, 5vw, 50px); line-height: 1.08; letter-spacing: -.02em; margin: 0 0 18px; }
+    .hero p.lead { font-size: 18px; line-height: 1.6; color: var(--text-2); margin: 0 0 28px; max-width: 34em; }
+    .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+    .preview { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 18px; }
+    .preview .bar { display: flex; gap: 6px; margin-bottom: 14px; }
+    .preview .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--border); display: block; }
+    .pv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pv { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .pv .l { font-size: 12px; color: var(--muted); }
+    .pv .v { font-size: 20px; font-weight: 700; margin-top: 4px; }
+    .pv .meter { height: 6px; background: var(--grid); border-radius: 99px; margin-top: 8px; overflow: hidden; }
+    .pv .meter b { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+    .pv-list { margin-top: 10px; }
+    .pv-list div { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 8px 2px; border-top: 1px solid var(--border); }
+    .pv-note { font-size: 11.5px; color: var(--muted); text-align: center; margin-top: 10px; }
+    .tag { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+    .tag.ok { background: var(--good-soft); color: var(--good); } .tag.due { background: var(--warn-soft); color: var(--warn); }
+    section.block { padding: 56px 0; }
+    section.block h2 { font-size: clamp(24px, 3.4vw, 34px); letter-spacing: -.01em; margin: 0 0 10px; }
+    section.block p.sub { color: var(--text-2); font-size: 16.5px; margin: 0 0 30px; max-width: 42em; line-height: 1.6; }
+    .zim { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 22px 0; }
+    .zim .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+    .zim b { margin-right: 6px; }
+    .chip { font-size: 13.5px; font-weight: 600; padding: 6px 12px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface-2); color: var(--text-2); }
+    .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 14px; }
+    .feature { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+    .feature .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; margin-bottom: 12px; }
+    .feature .ic svg { width: 22px; height: 22px; fill: currentColor; }
+    .feature h3 { margin: 0 0 6px; font-size: 16.5px; }
+    .feature p { margin: 0; color: var(--text-2); font-size: 14.5px; line-height: 1.55; }
+    .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+    .point { display: flex; gap: 12px; align-items: flex-start; padding: 14px 0; border-top: 1px solid var(--border); }
+    .point:first-child { border-top: 0; }
+    .tick { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--good-soft); color: var(--good); display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+    .point b { display: block; margin-bottom: 2px; }
+    .point span { color: var(--text-2); font-size: 14.5px; line-height: 1.5; }
+    .card-lite { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 6px 22px; }
+    .band { background: var(--accent); color: #fff; border-radius: 18px; padding: 36px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; }
+    .band h2 { margin: 0 0 6px; color: #fff; }
+    .band p { margin: 0; opacity: .9; max-width: 36em; }
+    .band .btn { background: #fff; color: #15171c; border-color: #fff; }
+    .band .btn.wa { background: #1c8d4c; color: #fff; border-color: #1c8d4c; }
+    .contact-line { margin-top: 10px; font-size: 14.5px; opacity: .95; }
+    .contact-line a { color: #fff; }
+    footer { padding: 30px 0 40px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 20px; justify-content: space-between; }
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: minmax(0, 1fr); padding-top: 40px; gap: 32px; }
+      .h-top .hide-sm { display: none; }
+    }
+    @media (max-width: 520px) {
+      .btn.lg { width: 100%; justify-content: center; }
+      .band { padding: 26px 20px; }
+      .h-brand { font-size: 15.5px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="h-top">
+    <div class="wrap">
+      <a class="h-brand" href="{{ root }}/"><span class="mark"><svg viewBox="0 0 24 24"><path d="{{ icons.students }}"/></svg></span><span>{{ brand }}</span></a>
+      <span class="spacer"></span>
+      {% if demo_url %}<a class="btn hide-sm" href="{{ demo_url }}">Try the demo</a>{% endif %}
+      <a class="btn primary" href="{{ root }}/login">Sign in</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <div>
+        <span class="eyebrow">For primary and secondary schools in Zimbabwe</span>
+        <h1>Run your school's money and records in one place</h1>
+        <p class="lead">{% if custom_tagline %}{{ tagline }}. {% endif %}Fees and receipts in USD and ZiG, ZIMRA-ready payroll, proper accounts, student records and the library, on any phone or computer.</p>
+        <div class="ctas">
+          {% if demo_url %}<a class="btn primary lg" href="{{ demo_url }}">Try the demo, no sign-up</a>{% endif %}
+          {% if contact.whatsapp %}<a class="btn wa lg" href="{{ contact.whatsapp }}" target="_blank" rel="noopener">Chat on WhatsApp</a>
+          {% elif contact.email %}<a class="btn lg" href="mailto:{{ contact.email }}">Email us</a>{% endif %}
+          {% if not demo_url and not has_contact %}<a class="btn primary lg" href="{{ root }}/login">Sign in to your school</a>{% endif %}
+        </div>
+      </div>
+      <div class="preview" aria-hidden="true">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <div class="pv-grid">
+          <div class="pv"><div class="l">Fees collected this term</div><div class="v">78%</div><div class="meter"><b style="width:78%"></b></div></div>
+          <div class="pv"><div class="l">Outstanding</div><div class="v">US$4,210</div><div class="l" style="margin-top:6px">ZiG 18,450</div></div>
+        </div>
+        <div class="pv-list">
+          <div><span>October payroll · PAYE, AIDS levy, NSSA</span><span class="tag ok">Approved</span></div>
+          <div><span>ZIMRA P2 due 10 November</span><span class="tag due">Due</span></div>
+          <div><span>Bank reconciliation · September</span><span class="tag ok">Balanced</span></div>
+          <div><span>Library books overdue</span><span class="tag due">7</span></div>
+        </div>
+        <div class="pv-note">Illustration</div>
+      </div>
+    </div>
+
+    <div class="zim">
+      <div class="wrap"><b>Built for Zimbabwe</b>
+        <span class="chip">ZIMRA PAYE (FDS)</span><span class="chip">AIDS levy</span><span class="chip">NSSA &amp; WCIF</span><span class="chip">ZIMDEF</span>
+        <span class="chip">P2 returns</span><span class="chip">USD &amp; ZiG side by side</span><span class="chip">ECD A to Form 6</span><span class="chip">ZIMSEC Grade 7, O &amp; A Level</span>
+      </div>
+    </div>
+
+    <section class="block">
+      <div class="wrap">
+        <h2>Everything the school office needs</h2>
+        <p class="sub">One system for the bursar, the head, teachers, the librarian and parents. Each person sees only what their role allows.</p>
+        <div class="features">
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.fees }}"/></svg></div><h3>Fees &amp; receipts</h3><p>Fee structures per class, term invoices in one click, receipts for cash, bank and mobile money, scholarships, statements and debtors lists.</p></div>
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.rates }}"/></svg></div><h3>USD, ZiG and more</h3><p>Every amount recorded in the currency it was paid in, never converted. Daily rates give combined totals; rand, pula and others can be added.</p></div>
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.payroll }}"/></svg></div><h3>Payroll</h3><p>PAYE on ZIMRA tax tables, AIDS levy, NSSA, WCIF and ZIMDEF, salaries split across currencies, payslips and P2 returns.</p></div>
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.statements }}"/></svg></div><h3>Proper accounts</h3><p>Double-entry books kept automatically: income statement, balance sheet, cash flow, general ledger and period locks.</p></div>
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.bank }}"/></svg></div><h3>Bank reconciliation</h3><p>Enter the bank statement, match it to the books, post charges and interest, and see exactly what is outstanding.</p></div>
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.results }}"/></svg></div><h3>Students &amp; academics</h3><p>Admissions, classes, timetable, attendance, marks, report cards and end-of-year promotion, following the Zimbabwe structure.</p></div>
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.library }}"/></svg></div><h3>Library</h3><p>Catalogue, issue and return at the desk, textbooks for the whole class, overdue lists, and fines added to the fees account.</p></div>
+          <div class="feature"><div class="ic"><svg viewBox="0 0 24 24"><path d="{{ icons.assets }}"/></svg></div><h3>Asset register</h3><p>Buildings, vehicles, computers and furniture with monthly depreciation posted straight to the accounts.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" style="padding-top:0">
+      <div class="wrap two">
+        <div>
+          <h2>Works the way schools work</h2>
+          <p class="sub" style="margin-bottom:0">No installation and no special computer: open it in a browser, or install it on a phone or laptop like any app.</p>
+        </div>
+        <div class="card-lite">
+          <div class="point"><span class="tick">✓</span><div><b>Phones, tablets and computers</b><span>The bursar on a laptop, the head on a phone, parents checking balances from home.</span></div></div>
+          <div class="point"><span class="tick">✓</span><div><b>Each school's data kept separate</b><span>Every school has its own database and its own users; nobody sees another school's records.</span></div></div>
+          <div class="point"><span class="tick">✓</span><div><b>Roles and permissions</b><span>Decide who can view, record or approve, from fees to payroll. Every change is kept in the audit log.</span></div></div>
+          <div class="point"><span class="tick">✓</span><div><b>A parent portal</b><span>Parents see their children's invoices, receipts, results, attendance and library books.</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    {% if pricing %}
+    <section class="block" style="padding-top:0">
+      <div class="wrap"><div class="card-lite" style="padding:22px"><h2 style="margin-top:0">Pricing</h2><p class="sub" style="margin:0">{{ pricing }}</p></div></div>
+    </section>
+    {% endif %}
+
+    <section class="block" style="padding-top:0">
+      <div class="wrap">
+        <div class="band">
+          <div>
+            <h2>{% if demo_url %}See it working before you decide{% else %}Want it for your school?{% endif %}</h2>
+            <p>{% if demo_url %}The demo school is full of sample students, fees, payroll and accounts. Sign in as the head, bursar, teacher or a parent with one click.{% else %}Get in touch and we'll set your school up with its own address.{% endif %}</p>
+            {% if contact.phone or contact.email %}<div class="contact-line">
+              {% if contact.phone %}Call <a href="tel:{{ contact.phone | replace(' ', '') }}">{{ contact.phone }}</a>{% endif %}
+              {% if contact.phone and contact.email %} · {% endif %}
+              {% if contact.email %}<a href="mailto:{{ contact.email }}">{{ contact.email }}</a>{% endif %}
+            </div>{% endif %}
+          </div>
+          <div class="ctas">
+            {% if demo_url %}<a class="btn lg" href="{{ demo_url }}">Open the demo</a>{% endif %}
+            {% if contact.whatsapp %}<a class="btn wa lg" href="{{ contact.whatsapp }}" target="_blank" rel="noopener">Chat on WhatsApp</a>{% endif %}
+            {% if not demo_url and not contact.whatsapp %}<a class="btn lg" href="{{ root }}/login">Sign in</a>{% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap"><span>© {{ brand }}</span><span><a href="{{ root }}/login">Sign in to your school</a></span></div>
+  </footer>
+</body>
+</html>

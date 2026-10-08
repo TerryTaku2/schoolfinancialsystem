@@ -278,3 +278,26 @@ def test_demo_school_is_filled_in_background(app, schools):
     assert res.status_code == 200
     with use_school(get_school("demo-one")):
         assert Student.query.count() > 0
+
+
+def test_public_front_page(app, schools):
+    c = app.test_client()
+    home = c.get("/").get_data(as_text=True)
+    assert "Run your school" in home and "/login" in home
+    assert "Platform console" not in home and "/platform" not in home      # not advertised to the public
+    assert "Try the demo" not in home and "wa.me" not in home              # nothing configured yet
+    signin = c.get("/login")
+    assert signin.status_code == 200 and 'id="login-form"' in signin.get_data(as_text=True)
+    assert "/platform" not in signin.get_data(as_text=True)
+    assert c.get("/s/alpha/login").status_code == 302                     # inside a school: its own sign-in
+    app.config.update(DEMO_SCHOOL="demo-one", CONTACT_WHATSAPP="+263 77 123 4567", CONTACT_EMAIL="hello@example.com",
+                      BRAND_NAME="Chikoro Office", PRICING_NOTE="From US$30 a month per school.")
+    try:
+        home = c.get("/").get_data(as_text=True)
+        assert "Chikoro Office" in home and "/s/demo-one/" in home and "Try the demo" in home
+        assert "https://wa.me/263771234567" in home and "mailto:hello@example.com" in home
+        assert "From US$30 a month per school." in home
+        assert "Chikoro Office" in c.get("/login").get_data(as_text=True)
+    finally:
+        app.config.update(DEMO_SCHOOL="demo", CONTACT_WHATSAPP="", CONTACT_EMAIL="", BRAND_NAME="School Management",
+                          PRICING_NOTE="")

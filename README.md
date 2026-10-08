@@ -332,6 +332,22 @@ tests/                 business-rule and accounting tests
 #   s c h o o l f i n a n c i a l s y s t e m 
  
  
+## Public front page
+
+In multi-school mode the main address shows a front page about the system: what it does, a **Try the demo** button and contact buttons. **Sign in** (`/login`) finds a user's school from their username and password. The platform console isn't linked from public pages; go to `/platform/` directly.
+
+Set these environment variables to fill it in; anything left empty is simply not shown:
+
+| Variable | Example | Shown as |
+|---|---|---|
+| `BRAND_NAME` | `Chikoro Office` | Name in the header, title and sign-in page |
+| `BRAND_TAGLINE` | `School fees, payroll and accounts, built for Zimbabwe` | Browser title and opening line |
+| `CONTACT_WHATSAPP` | `263771234567` | "Chat on WhatsApp" buttons |
+| `CONTACT_PHONE` | `+263 77 123 4567` | "Call" link |
+| `CONTACT_EMAIL` | `hello@yourdomain.co.zw` | Email link |
+| `PRICING_NOTE` | `From US$30 a month per school` | A pricing section |
+| `DEMO_SCHOOL` | `demo` (default) | "Try the demo" buttons, when a school with this code exists |
+
 ## Deploying on Render
 
 The repository includes a Render Blueprint (`render.yaml`) that creates the web service and a PostgreSQL database.

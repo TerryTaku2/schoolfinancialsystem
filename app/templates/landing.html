@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in · School Management</title>
+  <title>Sign in · {{ config.BRAND_NAME }}</title>
   {% set root = request.environ.get('school.root', request.script_root) %}
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M6 13l10-5 10 5-10 5z' fill='white'/%3E%3Cpath d='M10 16v5c3 2 9 2 12 0v-5' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ root }}/static/css/app.css">
@@ -14,7 +14,7 @@
 <body>
   <div class="login-wrap">
     <form class="login-card" id="login-form" novalidate>
-      <div class="brand"><div class="logo">SM</div><div><h1>School Management</h1><div class="muted">Sign in to your school</div></div></div>
+      <div class="brand"><div class="logo">SM</div><div><h1>{{ config.BRAND_NAME }}</h1><div class="muted">Sign in to your school</div></div></div>
       <div class="notice warn" id="msg" style="margin-bottom:14px"{% if not error %} hidden{% endif %}>{{ error or "" }}</div>
       <div class="form" id="creds">
         <label class="field"><span>Username</span><input class="input" name="username" autocomplete="username" required autofocus></label>
@@ -25,7 +25,7 @@
       <div class="form" id="pick" hidden></div>
       <details class="small" style="margin-top:14px"><summary style="cursor:pointer">Forgot password?</summary>
         <p class="muted" style="margin:8px 0 0">Open your school's own address (for example <code>/s/your-school-code/</code>) and choose <b>Forgot password?</b>, or ask your school's administrator to reset it. Administrators who forgot their own password: ask the platform operator.</p></details>
-      <p class="small" style="margin-top:18px"><a href="{{ root }}/platform/">Platform console</a></p>
+      <p class="small" style="margin-top:18px"><a href="{{ root }}/">← About {{ config.BRAND_NAME }}</a></p>
     </form>
   </div>
   <script>

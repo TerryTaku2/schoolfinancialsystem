@@ -87,6 +87,14 @@ class Config:
 
     # Single-school mode only; in multi-school mode each school has its own name and currency.
     SCHOOL_NAME = os.environ.get("SCHOOL_NAME", "Greenfield Academy")
+    # Public front page (multi-school mode). Contacts left empty are not shown.
+    BRAND_NAME = os.environ.get("BRAND_NAME", "School Management")
+    BRAND_TAGLINE = os.environ.get("BRAND_TAGLINE", "")
+    CONTACT_WHATSAPP = os.environ.get("CONTACT_WHATSAPP", "")  # e.g. 263771234567
+    CONTACT_PHONE = os.environ.get("CONTACT_PHONE", "")
+    CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "")
+    PRICING_NOTE = os.environ.get("PRICING_NOTE", "")
+    DEMO_SCHOOL = os.environ.get("DEMO_SCHOOL", "demo")  # code of the demo school linked from the front page
     CURRENCY = os.environ.get("CURRENCY", "USD")
     # Minimum attendance % before a student is flagged as at-risk.
     ATTENDANCE_THRESHOLD = 85.0
