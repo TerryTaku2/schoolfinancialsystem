@@ -996,3 +996,94 @@ class BankStatementLine(db.Model):
     journal_line = db.relationship("JournalLine")
 
     __table_args__ = (CheckConstraint("amount_cents <> 0", name="ck_bank_line_nonzero"),)
+
+
+# --------------------------------------------------------------------------- #
+# Library
+# --------------------------------------------------------------------------- #
+BOOK_CATEGORIES = ("Textbook", "Fiction", "Non-fiction", "Reference", "Revision guide", "Magazine", "Other")
+COPY_STATUSES = ("available", "on_loan", "lost", "withdrawn")
+BOOK_CONDITIONS = ("New", "Good", "Fair", "Poor", "Damaged")
+
+
+class Book(TimestampMixin, db.Model):
+    """A title in the library catalogue; the physical books are its copies."""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False, index=True)
+    author = db.Column(db.String(150))
+    isbn = db.Column(db.String(20), index=True)
+    publisher = db.Column(db.String(120))
+    year = db.Column(db.Integer)
+    edition = db.Column(db.String(40))
+    category = db.Column(db.String(20), nullable=False, default="Other")
+    subject_id = db.Column(db.Integer, db.ForeignKey("subject.id"))
+    level = db.Column(db.String(10))  # grade/form code the book is meant for (G5, F3...), optional
+    shelf = db.Column(db.String(40))
+    notes = db.Column(db.String(300))
+
+    subject = db.relationship("Subject")
+    copies = db.relationship("BookCopy", back_populates="book", cascade="all, delete-orphan", order_by="BookCopy.id")
+
+    __table_args__ = (CheckConstraint(f"category IN {BOOK_CATEGORIES}", name="ck_book_category"),)
+
+
+class BookCopy(TimestampMixin, db.Model):
+    """One physical book, identified by its accession number (also used as its barcode)."""
+    id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, db.ForeignKey("book.id"), nullable=False, index=True)
+    accession_no = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    status = db.Column(db.String(10), nullable=False, default="available")
+    condition = db.Column(db.String(10), nullable=False, default="Good")
+    acquired_on = db.Column(db.Date, default=date.today)
+    # What the school charges when the copy is lost (in `currency`); 0 = no charge.
+    replacement_cents = db.Column(db.Integer, nullable=False, default=0)
+    currency = db.Column(db.String(3), default=_default_currency)
+    notes = db.Column(db.String(200))
+
+    book = db.relationship("Book", back_populates="copies")
+    loans = db.relationship("Loan", back_populates="copy", order_by="Loan.id.desc()")
+
+    __table_args__ = (CheckConstraint(f"status IN {COPY_STATUSES}", name="ck_copy_status"),
+                      CheckConstraint("replacement_cents >= 0", name="ck_copy_replacement"))
+
+
+class Loan(TimestampMixin, db.Model):
+    """A copy lent to a student or a member of staff, and any fine that followed.
+
+    fine_status: none | unpaid (owed) | charged (added to the student's fees invoice) | paid | waived
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    copy_id = db.Column(db.Integer, db.ForeignKey("book_copy.id"), nullable=False, index=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("student.id"), index=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey("staff.id"), index=True)
+    issued_on = db.Column(db.Date, nullable=False, default=date.today)
+    due_on = db.Column(db.Date, nullable=False, index=True)
+    returned_on = db.Column(db.Date)
+    lost = db.Column(db.Boolean, nullable=False, default=False)
+    renewals = db.Column(db.Integer, nullable=False, default=0)
+    condition_out = db.Column(db.String(10))
+    condition_in = db.Column(db.String(10))
+    issued_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    received_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    fine_cents = db.Column(db.Integer, nullable=False, default=0)
+    fine_currency = db.Column(db.String(3))
+    fine_status = db.Column(db.String(10), nullable=False, default="none")
+    fine_note = db.Column(db.String(200))
+    fine_invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id"))
+
+    copy = db.relationship("BookCopy", back_populates="loans")
+    student = db.relationship("Student")
+    staff = db.relationship("Staff")
+    issuer = db.relationship("User", foreign_keys=[issued_by])
+    receiver = db.relationship("User", foreign_keys=[received_by])
+    fine_invoice = db.relationship("Invoice")
+
+    __table_args__ = (
+        CheckConstraint("(student_id IS NULL) <> (staff_id IS NULL)", name="ck_loan_one_borrower"),
+        CheckConstraint("fine_status IN ('none', 'unpaid', 'charged', 'paid', 'waived')", name="ck_loan_fine_status"),
+        CheckConstraint("fine_cents >= 0", name="ck_loan_fine"),
+    )
+
+    @property
+    def is_open(self):
+        return self.returned_on is None and not self.lost

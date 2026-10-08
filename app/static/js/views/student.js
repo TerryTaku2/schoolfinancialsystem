@@ -8,7 +8,7 @@ import { STUDENT_FIELDS } from "./students.js";
 export default async function (el, [id]) {
   const s = await api.get(`/students/${id}`);
   const fin = !!s.account;
-  const tabs = [["overview", "Overview"], ["attendance", "Attendance"], ["academics", "Academics"], ...(fin ? [["finance", "Finance"]] : [])];
+  const tabs = [["overview", "Overview"], ["attendance", "Attendance"], ["academics", "Academics"], ...(fin ? [["finance", "Finance"]] : []), ["library", "Library"]];
   el.innerHTML = `
     <div class="page-head"><div><a href="#/students" class="small">${icon("back").replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px"')} Students</a>
       <h1 style="margin-top:6px">${esc(s.name)} ${badge(s.status)}</h1><p>${esc(s.admission_no)} · ${esc(s.class || "No class")} · ${esc(s.gender)}, ${s.age} yrs</p></div>
@@ -54,9 +54,27 @@ export default async function (el, [id]) {
       <div class="card"><div class="card-head"><div><h3>Scholarships</h3><div class="sub">Applied as a discount to tuition when invoices are generated</div></div>${has("fees.manage") ? `<button class="btn sm" id="add-sch">${icon("plus")} Add</button>` : ""}</div>
         <ul class="list">${s.scholarships.map((x) => `<li><span><b>${esc(x.name)}</b> · ${x.percent}%</span><span class="row">${badge(x.active ? "active" : "void", x.active ? "active" : "inactive")}${has("fees.manage") ? `<button class="btn sm" data-sch="${x.id}" data-active="${x.active}">${x.active ? "Deactivate" : "Activate"}</button>` : ""}</span></li>`).join("") || `<li class="muted">None.</li>`}</ul></div>
     </div>`,
+    library: () => `<div id="lib"><div class="empty">Loading…</div></div>`,
   };
 
   const wire = {
+    library: async (pane) => {
+      const box = pane.querySelector("#lib");
+      let r;
+      try { r = await api.get(`/library/students/${s.id}/loans`); } catch (err) { box.innerHTML = `<div class="empty">${esc(err.message)}</div>`; return; }
+      const label = { on_loan: ["info", "on loan"], overdue: ["overdue", "overdue"], returned: ["plain", "returned"], lost: ["blocked", "lost"] };
+      box.innerHTML = `<div class="grid g-3" style="margin-bottom:16px">
+          <div class="card stat"><div class="label">Books out</div><div class="value">${r.on_loan}</div></div>
+          <div class="card stat"><div class="label">Overdue</div><div class="value" style="${r.overdue ? "color:var(--bad)" : ""}">${r.overdue}</div></div>
+          <div class="card stat"><div class="label">Fines owed</div><div class="value">${r.fines.length ? r.fines.map((f) => money(f.amount, f.currency)).join(" · ") : money(0)}</div></div></div>
+        <div class="card"><div class="card-head"><h3>Library books</h3></div><div id="lib-t"></div></div>`;
+      table(box.querySelector("#lib-t"), { rows: r.items, empty: "No library books borrowed yet.", columns: [
+        { key: "title", label: "Book", render: (l) => `<b>${esc(l.title)}</b><br><span class="muted small">${esc(l.accession_no)}</span>` },
+        { key: "issued_on", label: "Borrowed", render: (l) => fmtDate(l.issued_on) },
+        { key: "due_on", label: "Due", render: (l) => fmtDate(l.due_on) },
+        { key: "status", label: "Status", render: (l) => `${badge(...(label[l.status] || ["plain", l.status]))}${l.days_overdue && !l.returned_on ? `<br><b class="small" style="color:var(--bad)">${l.days_overdue} days late</b>` : ""}` },
+        { key: "fine", label: "Fine", num: true, render: (l) => (l.fine_status && l.fine_status !== "none" ? `${money(l.fine, l.fine_currency)}<br><span class="muted small">${esc(l.fine_status === "charged" ? "added to fees" : l.fine_status)}</span>` : "—") }] });
+    },
     academics: async (pane) => {
       const load = async () => {
         const rc = pane.querySelector("#rc");

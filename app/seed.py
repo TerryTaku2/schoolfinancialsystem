@@ -406,6 +406,8 @@ def seed_demo(students_per_class=14, rng_seed=42, school_type="primary"):
         assets.run_depreciation(period, bursar.id)
         period = assets.month_add(period, 1)
 
+    _seed_library(rng, school_type, students, teachers, today)
+
     db.session.add_all([
         Announcement(title="Welcome to the new term", pinned=True, audience="all", created_by=admin.id,
                      body="Classes run 08:00-13:40. Please ensure all fees are settled by the due date to avoid penalties."),
@@ -419,6 +421,69 @@ def seed_demo(students_per_class=14, rng_seed=42, school_type="primary"):
 
 
 from .services.currency import CURRENCIES as CURRENCY_CODES  # noqa: E402
+
+
+# (title, author, category, subject code, level, copies, replacement cost in dollars)
+DEMO_BOOKS = [
+    ("Nervous Conditions", "Tsitsi Dangarembga", "Fiction", "LIT", None, 3, 15),
+    ("Waiting for the Rain", "Charles Mungoshi", "Fiction", "LIT", None, 3, 12),
+    ("Harvest of Thorns", "Shimmer Chinodya", "Fiction", "LIT", None, 2, 12),
+    ("The Stone Virgins", "Yvonne Vera", "Fiction", "LIT", None, 2, 14),
+    ("Things Fall Apart", "Chinua Achebe", "Fiction", "LIT", None, 4, 10),
+    ("We Need New Names", "NoViolet Bulawayo", "Fiction", "LIT", None, 2, 16),
+    ("Feso", "Solomon Mutswairo", "Fiction", "SHON", None, 2, 8),
+    ("Charlie and the Chocolate Factory", "Roald Dahl", "Fiction", "ENG", "G4", 3, 9),
+    ("The Lion, the Witch and the Wardrobe", "C. S. Lewis", "Fiction", "ENG", "G5", 3, 9),
+    ("Animal Farm", "George Orwell", "Fiction", "LIT", None, 4, 8),
+    ("Oxford School Dictionary", "Oxford University Press", "Reference", None, None, 4, 20),
+    ("Longman Atlas for Zimbabwe", "Longman", "Reference", None, None, 3, 18),
+    ("A Brief History of Zimbabwe", "Various", "Non-fiction", "HIST", None, 2, 15),
+    ("Grade 3 Mathematics Learner's Book", "Curriculum Development Unit", "Textbook", "MATH", "G3", 6, 7),
+    ("Grade 5 English Learner's Book", "Curriculum Development Unit", "Textbook", "ENG", "G5", 6, 7),
+    ("Grade 7 Science and Technology", "Curriculum Development Unit", "Textbook", "SCT", "G7", 6, 8),
+    ("Form 1 Mathematics", "Curriculum Development Unit", "Textbook", "MATHS", "F1", 6, 9),
+    ("Form 3 Combined Science", "Curriculum Development Unit", "Textbook", "CSCI", "F3", 6, 10),
+    ("O Level Mathematics Revision Guide", "ZIMSEC Past Papers", "Revision guide", "MATHS", "F4", 4, 6),
+    ("O Level Geography Revision Guide", "ZIMSEC Past Papers", "Revision guide", "GEOG", "F4", 3, 6),
+    ("A Level Biology", "Cambridge University Press", "Textbook", "BIO", "F5", 4, 25),
+]
+
+
+def _seed_library(rng, school_type, students, teachers, today):
+    """A small catalogue with books out, some overdue, and a few late returns with fines."""
+    from .models import Book, BookCopy, Loan, Setting
+    from .services import library
+    db.session.add(Setting(key="library_fine_per_day", value="10"))  # 10 cents a day late
+    codes = set(structure.codes_for(school_type))
+    subjects = {s.code: s for s in Subject.query}
+    copies = []
+    for title, author, cat, subj, level, n, cost in DEMO_BOOKS:
+        if level and level not in codes or subj and subj not in subjects:
+            continue
+        book = Book(title=title, author=author, category=cat, subject=subjects.get(subj), level=level,
+                    shelf=f"{cat[:3].upper()}-{rng.randint(1, 12)}")
+        db.session.add(book)
+        copies += library.add_copies(book, n, cost * 100, condition=rng.choice(["New", "Good", "Good", "Fair"]))
+    borrowers = [("student", s) for s in students if s.status == "active"] + [("staff", t) for t in teachers]
+    rng.shuffle(copies)
+    for i, copy in enumerate(copies):
+        if not borrowers or i % 3 == 2:
+            continue  # a third stay on the shelf
+        kind, person = borrowers[i % len(borrowers)]
+        who = {"student": person} if kind == "student" else {"staff": person}
+        if i % 5 == 0:  # an earlier loan, returned (sometimes late)
+            issued = today - timedelta(days=rng.randint(30, 70))
+            loan = Loan(copy=copy, issued_on=issued, due_on=issued + timedelta(days=14), condition_out=copy.condition, **who)
+            db.session.add(loan)
+            library.return_loan(loan, on=issued + timedelta(days=rng.choice([7, 12, 14, 18, 25])))
+            if loan.fine_status == "unpaid" and i % 2:
+                loan.fine_status, loan.fine_note = "paid", f"{loan.fine_note} · paid at the library"
+            continue
+        issued = today - timedelta(days=rng.randint(1, 28))
+        db.session.add(Loan(copy=copy, issued_on=issued, due_on=issued + timedelta(days=14),
+                            condition_out=copy.condition, **who))
+        copy.status = "on_loan"
+    db.session.flush()
 
 
 def register_cli(app):

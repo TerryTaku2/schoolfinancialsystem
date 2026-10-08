@@ -110,6 +110,16 @@ flask --app run adopt-school --code greenfield --name "Greenfield Academy" --dat
   - Someone who manages users can only grant permissions they hold themselves, and can't change their own.
   - Every change is written to the audit log.
 
+## Library
+
+**Library** in the menu (under Academics) runs the school library.
+
+- **Catalogue:** titles with author, ISBN, category (textbook, fiction, reference...), subject, level and shelf. Each physical copy gets an accession number (LIB-00001...), or keeps the number already on its label. Stick the number on the book: the desk finds books by typing it or scanning it with a USB barcode scanner.
+- **Issue & return:** scan a book, then search for the student or staff member and lend it, or take it back, renew it or mark it lost. Students borrow up to 3 books for 14 days and staff 10 for 30 days, with 2 renewals; all of these are adjustable under **Rules**. Nobody can borrow while they have an overdue book.
+- **Textbooks for the term:** from a textbook's page, **Issue to a class** lends one copy to every student in the class, due at the end of term. These don't count towards the borrowing limit.
+- **Fines:** optional, per day late, in the school currency. A lost book is charged at the copy's replacement cost. A student's fine can be **added to their fees invoice** for the term (it shows on their statement, is paid like any fee and is booked to Sundry Income), marked paid, or waived with a reason.
+- **Who sees what:** permissions are library view, manage (issue, return, add books) and approve (waive fines, delete books, change rules). Teachers and bursars can browse the library by default; create a "Librarian" role with Library manage for the librarian. Parents see their children's books on the student page.
+
 ## Forgotten passwords
 
 No email is needed; whoever is one level up resets the password and the person then chooses their own.
