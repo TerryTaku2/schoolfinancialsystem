@@ -222,6 +222,9 @@ def resolve_school():
     if row is None:
         return _not_found("That school address doesn't exist. Sign in below and we'll take you to your school.")
     if row.status != "active":
+        from .api.platform import SETUP
+        if SETUP.get(slug, {}).get("state") == "preparing":
+            return _not_found("This school is still being set up. Please try again in a few minutes.")
         return _not_found("This school's account is suspended. Please contact the platform administrator.")
     g.school = _snapshot(row)
     g.tenant_engine = engine_for(g.school)

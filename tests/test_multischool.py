@@ -251,3 +251,30 @@ def test_bad_school_address_shows_styled_sign_in(app, schools):
     assert r.status_code == 404
     html = r.get_data(as_text=True)
     assert 'href="/static/css/app.css"' in html and 'name="password"' in html
+
+
+def test_demo_school_is_filled_in_background(app, schools):
+    """A demo takes longer than a web request may last, so the console returns at once and the
+    school opens (with passwordless demo accounts) once it's ready."""
+    import time
+    r = schools.post("/platform/api/schools", headers=H, json={
+        "name": "Demo School", "slug": "demo-one", "school_type": "primary", "currency": "USD", "demo": True,
+        "admin_username": "admin", "admin_password": "DemoPass1"})
+    assert r.status_code == 201 and r.json["preparing"] and r.json["status"] == "suspended"
+    c = app.test_client()
+    early = c.get("/s/demo-one/api/auth/demo")
+    if early.status_code == 404:  # still filling
+        assert "being set up" in early.get_data(as_text=True)
+        assert schools.put(f"/platform/api/schools/{r.json['id']}", json={"status": "active"}, headers=H).status_code == 409
+    for _ in range(600):
+        row = next(s for s in schools.get("/platform/api/schools").json["items"] if s["slug"] == "demo-one")
+        if not row["preparing"]:
+            break
+        time.sleep(0.5)
+    assert row["status"] == "active" and not row["preparing"]
+    assert c.get("/s/demo-one/api/auth/demo").json["enabled"] is True
+    assert c.post("/s/demo-one/api/auth/demo-login", json={"username": "bursar"}, headers=H).status_code == 200
+    admin, res = school_login(app, "demo-one", password="DemoPass1")
+    assert res.status_code == 200
+    with use_school(get_school("demo-one")):
+        assert Student.query.count() > 0

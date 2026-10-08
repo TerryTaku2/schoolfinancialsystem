@@ -48,8 +48,15 @@ async function boot() {
   await load();
 }
 
+let poll = null;
 async function load() {
   const r = await call("GET", "/schools");
+  for (const f of r.failed || []) toast(`Setting up ${f.name} failed: ${f.error}`, "error");
+  // While a demo school is being filled, check back every few seconds.
+  clearTimeout(poll);
+  if (r.items.some((s) => s.preparing)) poll = setTimeout(() => load().catch(() => {}), 5000);
+  for (const s of r.items) if (load.waiting?.has(s.id) && !s.preparing && s.status === "active") toast(`${s.name} is ready`, "success");
+  load.waiting = new Set(r.items.filter((s) => s.preparing).map((s) => s.id));
   table($("#tbl"), {
     rows: r.items, sortKey: "name", empty: "No schools yet. Create the first one.",
     columns: [
@@ -59,8 +66,8 @@ async function load() {
       { key: "currency", label: "Currency" },
       { key: "storage", label: "Database" },
       { key: "created_at", label: "Created", render: (s) => fmtDate(s.created_at) },
-      { key: "status", label: "Status", render: (s) => badge(s.status === "active" ? "active" : "blocked", s.status) },
-      { key: "id", label: "", sort: false, cls: "actions", render: (s) => `<button class="btn sm" data-rename="${s.id}">Rename</button> <button class="btn sm ${s.status === "active" ? "danger" : ""}" data-status="${s.id}">${s.status === "active" ? "Suspend" : "Reactivate"}</button>` },
+      { key: "status", label: "Status", render: (s) => s.preparing ? badge("pending", "Preparing demo data…") : badge(s.status === "active" ? "active" : "blocked", s.status) },
+      { key: "id", label: "", sort: false, cls: "actions", render: (s) => s.preparing ? `<span class="muted small">Opens when ready</span>` : `<button class="btn sm" data-rename="${s.id}">Rename</button> <button class="btn sm ${s.status === "active" ? "danger" : ""}" data-status="${s.id}">${s.status === "active" ? "Suspend" : "Reactivate"}</button>` },
     ],
   });
   $("#tbl").querySelectorAll("[data-rename]").forEach((b) => (b.onclick = async () => {
@@ -101,7 +108,7 @@ async function newSchool(me) {
   form.name.addEventListener("input", () => { if (!touched) form.slug.value = slugify(form.name.value); });
   const s = await done;
   if (s) {
-    toast(`${s.name} created`, "success");
+    toast(s.preparing ? `${s.name} created. Filling it with demo data; this can take a few minutes.` : `${s.name} created`, "success");
     load();
   }
 }

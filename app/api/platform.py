@@ -6,6 +6,7 @@ accounts, ZIMRA tax tables and its first administrator. Operators never sign in 
 school with their platform login; each school's users are separate.
 """
 import os
+import threading
 import time
 from collections import defaultdict, deque
 
@@ -63,9 +64,11 @@ def _require_operator():
 
 def school_dict(s):
     root = request.script_root
+    setup = SETUP.get(s.slug)
     return {"id": s.id, "slug": s.slug, "name": s.name, "school_type": s.school_type,
             "school_type_label": structure.SCHOOL_TYPES.get(s.school_type, s.school_type),
             "currency": s.currency, "status": s.status, "created_at": s.created_at.isoformat(),
+            "preparing": bool(setup and setup["state"] == "preparing"),
             "url": f"{root}/s/{s.slug}/", "storage": "PostgreSQL schema " + s.db_schema if s.db_schema else "SQLite"}
 
 
@@ -113,11 +116,26 @@ def me():
 @bp.get("/platform/api/schools")
 def list_schools():
     _require_operator()
-    return jsonify(items=[school_dict(s) for s in School.query.order_by(School.name)])
+    failed = [dict(v, slug=k) for k, v in SETUP.items() if v["state"] == "failed"]
+    for f in failed:
+        SETUP.pop(f["slug"], None)  # reported once
+    return jsonify(items=[school_dict(s) for s in School.query.order_by(School.name)],
+                   failed=[{"slug": f["slug"], "name": f["name"], "error": f["error"]} for f in failed])
 
 
-def provision_school(name, slug, school_type, currency, admin, demo=False):
-    """Create a school, its database and its first administrator. Returns the School row."""
+# Demo schools being filled in the background: {slug: {"state": "preparing" | "failed", "name", "error"}}.
+# Filling a demo takes minutes on a small server, longer than a web request may last, so it runs
+# in a thread while the school stays suspended (nobody can open a half-filled school).
+SETUP = {}
+DEMO_STUDENTS_PER_CLASS = 8
+
+
+def provision_school(name, slug, school_type, currency, admin, demo=False, background=False,
+                     students_per_class=None):
+    """Create a school, its database and its first administrator. Returns the School row.
+
+    background=True returns at once with the school suspended and fills it in a thread
+    (used for demo schools from the console); it becomes active when ready."""
     slug = (slug or "").strip().lower()
     if not valid_slug(slug):
         raise ApiError("School code: 3-40 lowercase letters, numbers or hyphens, not starting or ending "
@@ -136,17 +154,47 @@ def provision_school(name, slug, school_type, currency, admin, demo=False):
     if url.startswith("sqlite:///") and os.path.exists(url[len("sqlite:///"):]):
         raise ApiError("A database for that school code already exists on the server. Choose another code.", 409)
     school = School(slug=slug, name=name, school_type=school_type, currency=currency,
-                    database_url=url, db_schema=schema)
+                    database_url=url, db_schema=schema, status="suspended" if background else "active")
     db.session.add(school)
     db.session.commit()
     school_id = school.id
+    admin = {**admin, "username": username}
+    if background:
+        SETUP[slug] = {"state": "preparing", "name": name, "error": None}
+        app = current_app._get_current_object()
+
+        def work():
+            with app.app_context():
+                try:
+                    _fill_school(school_id, school_type, admin, demo, students_per_class)
+                    row = db.session.get(School, school_id)
+                    row.status = "active"
+                    db.session.commit()
+                    SETUP.pop(slug, None)
+                except Exception as err:  # reported in the console; the half-made school is removed
+                    current_app.logger.exception("Setting up school %s failed", slug)
+                    SETUP[slug] = {"state": "failed", "name": name, "error": str(err)[:300]}
+
+        threading.Thread(target=work, name=f"setup-{slug}", daemon=True).start()
+        return school
+    _fill_school(school_id, school_type, admin, demo, students_per_class)
+    return db.session.get(School, school_id)
+
+
+def _fill_school(school_id, school_type, admin, demo, students_per_class=None):
+    """Load the structure (or demo data) and the first administrator into a new school's database.
+    On failure the school and its database are removed again."""
+    school = db.session.get(School, school_id)
+    slug, url = school.slug, school.database_url
     try:
         with use_school(school):
             if demo:
                 from ..seed import seed_demo
-                seed_demo(school_type=school_type)
+                seed_demo(school_type=school_type,
+                          **({"students_per_class": students_per_class} if students_per_class else {}))
             else:
                 structure.setup_new_school(school_type)
+            username = admin["username"]
             if User.query.filter_by(username=username).first():
                 user = User.query.filter_by(username=username).first()
                 user.role, user.active = "admin", True
@@ -169,7 +217,6 @@ def provision_school(name, slug, school_type, currency, admin, demo=False):
             except OSError:
                 pass
         raise
-    return db.session.get(School, school_id)
 
 
 @bp.post("/platform/api/schools")
@@ -181,7 +228,8 @@ def create_school():
         clean_str(data["name"], 120), data["slug"], data["school_type"], data.get("currency") or "USD",
         {"username": data["admin_username"], "password": data["admin_password"],
          "full_name": clean_str(data.get("admin_full_name"), 120), "email": clean_str(data.get("admin_email"), 120)},
-        demo=bool(data.get("demo")))
+        demo=bool(data.get("demo")), background=bool(data.get("demo")),
+        students_per_class=DEMO_STUDENTS_PER_CLASS if data.get("demo") else None)
     return jsonify(school_dict(school)), 201
 
 
@@ -197,6 +245,8 @@ def update_school(sid):
     if "status" in data:
         if data["status"] not in ("active", "suspended"):
             raise ApiError("Invalid status")
+        if s.slug in SETUP:
+            raise ApiError("This school is still being set up. It becomes active by itself when ready.", 409)
         s.status = data["status"]
     db.session.commit()
     return jsonify(school_dict(s))
