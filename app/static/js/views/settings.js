@@ -2,6 +2,12 @@ import { api } from "../api.js";
 import { refreshMeta } from "../app.js";
 import { badge, confirmDialog, esc, fmtDate, formModal, handleError, has, icon, selectHtml, table, toast } from "../ui.js";
 
+// "1 USD = 26.75 ZWG · 18.4 ZAR (7 Oct 2026)"
+const ratesText = (rates, order = []) => {
+  const list = order.map((c) => rates?.[c]).filter(Boolean);
+  return list.length ? `Latest rates: 1 USD = ${list.map((r) => `${r.per_usd} ${esc(r.currency)}`).join(" · ")} (${fmtDate(list.map((r) => r.date).sort().pop())}).` : "";
+};
+
 export default async function (el) {
   el.innerHTML = `
     <div class="page-head"><div><h1>Settings</h1><p>School type, academic calendar, grading scales and end-of-year promotion</p></div></div>
@@ -50,8 +56,10 @@ export default async function (el) {
       <label class="check"><input type="checkbox" id="demo-login" ${p.demo ? "checked" : ""}> Demo accounts sign in without a password</label>
       <p class="muted small" style="margin:6px 0 0">For training and trying the system out with demo data only. Anyone who opens this school's address can then sign in as the administrator, bursar, teacher or parent demo account.</p>
       <h3 style="margin:18px 0 6px">Currencies</h3>
-      <label class="check"><input type="checkbox" id="dual" ${p.dual_currency ? "checked" : ""}> Accept both USD and ZWG (dual currency)</label>
-      <p class="muted small" style="margin:6px 0 0">Each fee, receipt, expense, salary and journal is recorded in the currency it happens in, never converted. Cash on hand, bank and mobile money get a separate account for each currency, and the bursar records the day's rate under Exchange Rates. ${p.rate ? `Latest rate: 1 USD = ${p.rate.zwg_per_usd} ZWG (${fmtDate(p.rate.date)}).` : ""}</p></div></div>
+      <p class="muted small" style="margin:0 0 8px">Tick every currency the school accepts or pays in. ${esc(p.currency)} is the school's own currency and is always on.</p>
+      <form id="currencies"><div class="currency-grid">${(p.currency_catalog || []).map((c) => `<label class="check"><input type="checkbox" name="cur" value="${esc(c.code)}" ${p.currencies.includes(c.code) ? "checked" : ""} ${c.code === p.currency ? "disabled" : ""}> <span><b>${esc(c.code)}</b> <span class="muted">${esc(c.label)}</span></span></label>`).join("")}</div>
+        <div class="row" style="margin-top:10px"><button class="btn primary">Save currencies</button></div></form>
+      <p class="muted small" style="margin:8px 0 0">Each fee, receipt, expense, salary and journal is recorded in the currency it happens in, never converted. Every currency gets its own cash on hand, bank and mobile money accounts, and the bursar records each day's rates against the US dollar under Exchange Rates. A currency can only be removed while nothing has been recorded in it. ${ratesText(p.rates, p.rate_currencies)}</p></div></div>
       <div class="card"><div class="card-head"><h3>Zimbabwe structure</h3></div><div class="card-body small">
         <p style="margin-top:0"><b>Primary:</b> ECD A, ECD B, Grades 1-7. Grade 7 sits ZIMSEC Grade 7 and completes primary school.</p>
         <p><b>Secondary:</b> Forms 1-4 (ZIMSEC O Level in Form 4), then Lower and Upper Six (Forms 5-6, A Level).</p>
@@ -63,11 +71,16 @@ export default async function (el) {
       try { await api.put("/school", { demo_login: on }); toast(on ? "Demo sign-in without passwords is on" : "Passwords are required again", "success"); }
       catch (err) { e.target.checked = !on; handleError(err); }
     };
-    pane.querySelector("#dual").onchange = async (e) => {
-      const on = e.target.checked;
-      if (!(await confirmDialog(on ? "Turn on dual currency? ZWG cash, bank and mobile money accounts are added, and every money form asks for the currency." : "Turn off dual currency? This is only possible if no ZWG transactions have been recorded.", { confirmText: on ? "Turn on" : "Turn off", danger: !on }))) { e.target.checked = !on; return; }
-      try { await api.put("/school", { dual_currency: on }); toast(on ? "Dual currency is on" : "Dual currency is off", "success"); await refreshMeta(); location.reload(); }
-      catch (err) { e.target.checked = !on; handleError(err); }
+    pane.querySelector("#currencies").onsubmit = async (e) => {
+      e.preventDefault();
+      const chosen = [p.currency, ...[...e.target.querySelectorAll('[name="cur"]:checked')].map((x) => x.value).filter((c) => c !== p.currency)];
+      const added = chosen.filter((c) => !p.currencies.includes(c)), removed = p.currencies.filter((c) => !chosen.includes(c));
+      if (!added.length && !removed.length) return toast("No change", "");
+      const msg = [added.length ? `Add ${added.join(", ")}? Cash on hand, bank and mobile money accounts are created for ${added.length > 1 ? "each" : "it"}, every money form lets you pick ${added.length > 1 ? "them" : "it"}, and the bursar should record ${added.length > 1 ? "their" : "its"} daily rate against USD.` : "",
+        removed.length ? `Remove ${removed.join(", ")}? This is only possible if nothing has been recorded in ${removed.length > 1 ? "them" : "it"}.` : ""].filter(Boolean).join(" ");
+      if (!(await confirmDialog(msg, { title: "Change currencies", confirmText: "Save", danger: removed.length > 0 }))) return;
+      try { const r = await api.put("/school", { currencies: chosen }); toast(`Currencies: ${r.currencies.join(", ")}`, "success"); await refreshMeta(); location.reload(); }
+      catch (err) { handleError(err); school(); }
     };
     pane.querySelector("#type").onsubmit = async (e) => {
       e.preventDefault();

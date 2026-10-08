@@ -57,6 +57,41 @@ def login():
     return jsonify(user=user.to_dict())
 
 
+@bp.post("/auth/find-school")
+def find_school():
+    """Multi-school front page: which schools do these credentials sign in to?
+
+    The browser then signs in at the school's own address, so cookies stay scoped to it.
+    Only schools where the password matches are listed, so this reveals nothing about
+    which usernames exist.
+    """
+    from flask import request
+    from ..models import School
+    from ..tenancy import _snapshot, use_school
+    if not current_app.config.get("MULTI_SCHOOL") or current_school():
+        raise ApiError("Not found", 404)
+    data = body()
+    require(data, "username", "password")
+    username, password = str(data["username"]).strip().lower(), str(data["password"])
+    if _throttled(username):
+        raise ApiError("Too many failed attempts. Try again in a few minutes.", 429)
+    root = request.environ.get("school.root", request.script_root)
+    matches = []
+    for school in [_snapshot(s) for s in School.query.filter_by(status="active").order_by(School.name)]:
+        try:
+            with use_school(school):
+                user = User.query.filter_by(username=username).first()
+                if user and user.active and user.check_password(password):
+                    matches.append({"slug": school.slug, "name": school.name, "url": f"{root}/s/{school.slug}/"})
+        except Exception:  # one unreachable school database must not block everyone else's sign-in
+            current_app.logger.exception("Sign-in lookup failed for school %s", school.slug)
+    if not matches:
+        _failed[_key(username)].append(time.time())
+        raise ApiError("Invalid username or password", 401)
+    _failed.pop(_key(username), None)
+    return jsonify(schools=matches)
+
+
 @bp.get("/auth/demo")
 def demo_accounts():
     """The one-click demo sign-ins offered on the login page (demo schools only)."""

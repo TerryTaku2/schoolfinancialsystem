@@ -217,3 +217,37 @@ def test_real_schools_never_allow_passwordless_sign_in(app, schools):
     c = app.test_client()
     assert c.get("/s/alpha/api/auth/demo").json["enabled"] is False
     assert c.post("/s/alpha/api/auth/demo-login", json={"username": "admin"}, headers=H).status_code == 403
+
+
+# ---------------------------------------------------------------- sign-in without a school code
+def find(app, username, password):
+    return app.test_client().post("/api/auth/find-school", json={"username": username, "password": password}, headers=H)
+
+
+def test_front_page_finds_school_from_credentials(app, schools):
+    r = find(app, "admin", PW["beta"])
+    assert r.status_code == 200
+    assert r.json["schools"] == [{"slug": "beta", "name": "Beta School", "url": "/s/beta/"}]
+    # The same username at another school with a different password is not offered.
+    assert [s["slug"] for s in find(app, "admin", PW["alpha"]).json["schools"]] == ["alpha"]
+
+
+def test_front_page_rejects_bad_credentials(app, schools):
+    assert find(app, "admin", "wrong-pass1").status_code == 401
+    assert find(app, "nobody", PW["alpha"]).status_code == 401
+
+
+def test_front_page_skips_suspended_schools(app, schools):
+    sid = next(s["id"] for s in schools.get("/platform/api/schools").json["items"] if s["slug"] == "beta")
+    schools.put(f"/platform/api/schools/{sid}", json={"status": "suspended"}, headers=H)
+    try:
+        assert find(app, "admin", PW["beta"]).status_code == 401
+    finally:
+        schools.put(f"/platform/api/schools/{sid}", json={"status": "active"}, headers=H)
+
+
+def test_bad_school_address_shows_styled_sign_in(app, schools):
+    r = app.test_client().get("/s/no-such-school/")
+    assert r.status_code == 404
+    html = r.get_data(as_text=True)
+    assert 'href="/static/css/app.css"' in html and 'name="password"' in html

@@ -31,15 +31,24 @@ export function compactMoney(n, currency) {
 }
 
 // ---------------------------------------------------------------- currencies
-// The school's currencies: ["USD"] normally, ["USD", "ZWG"] with dual currency on (Settings -> School).
+// The school's currencies, base first: ["USD"], or e.g. ["USD", "ZWG", "ZAR"] (Settings -> School -> Currencies).
 export function currencies() { return state.meta?.profile?.currencies || [state.meta?.currency || "USD"]; }
+// True when the school works in more than one currency (the name dates from the two-currency version).
 export function isDual() { return currencies().length > 1; }
 export function baseCurrency() { return currencies()[0]; }
-// A currency picker for forms; only shown when the school works in both currencies.
-export function currencyField(extra = {}) {
-  return isDual() ? [{ name: "currency", label: "Currency", type: "select", required: true, options: currencies(), default: baseCurrency(), ...extra }] : [];
+// "ZAR" -> "South African rand"
+export function currencyName(code) {
+  return (state.meta?.profile?.currency_catalog || []).find((c) => c.code === code)?.label || code;
 }
-// Amounts per currency side by side: [{currency, amount}] or {USD: 1, ZWG: 2}.
+// Options for a currency <select>: "ZAR · South African rand".
+export function currencyOptions(codes = currencies()) {
+  return codes.map((c) => ({ value: c, label: c === currencyName(c) ? c : `${c} · ${currencyName(c)}` }));
+}
+// A currency picker for forms; only shown when the school works in more than one currency.
+export function currencyField(extra = {}) {
+  return isDual() ? [{ name: "currency", label: "Currency", type: "select", required: true, options: currencyOptions(), default: baseCurrency(), ...extra }] : [];
+}
+// Amounts per currency side by side: [{currency, amount}] or {USD: 1, ZWG: 2, ZAR: 3}.
 export function moneyList(items) {
   const rows = Array.isArray(items) ? items : Object.entries(items || {}).map(([currency, amount]) => ({ currency, amount }));
   return rows.length ? rows.map((r) => money(r.amount, r.currency)).join(" · ") : money(0);

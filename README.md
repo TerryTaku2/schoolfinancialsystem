@@ -110,21 +110,22 @@ flask --app run adopt-school --code greenfield --name "Greenfield Academy" --dat
   - Someone who manages users can only grant permissions they hold themselves, and can't change their own.
   - Every change is written to the audit log.
 
-## USD and ZWG (dual currency)
+## Multiple currencies
 
-Schools that take both US dollars and ZiG switch on **Settings → School → Accept both USD and ZWG**. From then on, every money transaction asks which currency it is in, and **each amount is recorded exactly as it happened. Nothing is ever converted.**
+A school works in its own currency (USD or ZWG, chosen when it is created) and can add any of the currencies used in Zimbabwe's multi-currency system: **ZWG, USD, ZAR, BWP, GBP, EUR, CNY, INR, JPY, AUD**, plus **ZMW** and **MZN** for schools near the borders. The administrator ticks them under **Settings → School → Currencies**. From then on, every money transaction asks which currency it is in, and **each amount is recorded exactly as it happened. Nothing is ever converted.**
 
-- **Accounts:** cash on hand, bank and mobile money each get a separate ZWG account (1001, 1011, 1021) next to the USD ones. A cash account holds only its own currency; income, expense and other accounts hold both.
-- **Fees:** each fee item has a currency, and a student gets one invoice per term per currency. A ZWG receipt clears ZWG invoices only, and credit is kept per currency. Student balances, statements of account, receipts and debtors reports are shown per currency.
+- **Accounts:** cash on hand, bank and mobile money each get a separate account per currency, numbered in the same block as the school-currency account (cash 1001-1009, bank 1011-1019, mobile money 1021-1029). A cash account holds only its own currency; income, expense and other accounts hold all of them.
+- **Fees:** each fee item has a currency, and a student gets one invoice per term per currency. A ZAR receipt clears ZAR invoices only, and credit is kept per currency. Student balances, statements of account, receipts and debtors reports are shown per currency.
 - **Expenses, assets, journals:** each is in one currency and is paid from (or received into) an account in that currency.
-- **Books:** every journal entry is in one currency, so each currency has its own complete, balancing books. Financial statements are shown for USD, for ZWG, or **combined in the school currency at the rate on the report date**.
-- **Exchange rates:** the bursar records the day's rate (ZWG per 1 USD) under **Exchange Rates**. It is used only for combined figures and for PAYE.
-- **Payroll in two currencies:** the basic salary, each allowance and deduction, and each overtime, bonus or one-off deduction has its own currency. Following ZIMRA's rule for remuneration paid partly in each currency:
-  - PAYE is worked out on the total, converted into the tax table's currency at the rate for the pay date.
+- **Books:** every journal entry is in one currency, so each currency has its own complete, balancing books. Financial statements are shown per currency, or **combined in the school currency at the rates on the report date**.
+- **Exchange rates:** the bursar records each day's rates against the US dollar under **Exchange Rates** (for example 1 USD = 26.75 ZWG and 18.40 ZAR), as the RBZ quotes them. Any two currencies convert through the dollar, e.g. ZAR to ZWG. Rates are used only for combined figures and for PAYE.
+- **Payroll in several currencies:** the basic salary, each allowance and deduction, and each overtime, bonus or one-off deduction has its own currency. Following ZIMRA's rule for remuneration paid in more than one currency:
+  - PAYE is worked out on the total, converted into the tax table's currency at the rates for the pay date.
   - PAYE, AIDS levy, NSSA and the employer levies are then withheld from each currency in proportion to the pay in it.
   - Net pay is paid from an account in each currency.
   - Tax withheld in each currency is remitted to ZIMRA in that currency, and the P2 report shows it per currency.
-- Existing data is upgraded automatically: everything recorded so far is in the school's own currency.
+- **Removing a currency** is only possible while nothing has been recorded in it. The school's own currency is always on.
+- Existing data is upgraded automatically: everything recorded before is in the school's own currency, and existing rates are ZWG per USD. Schools that used the earlier USD + ZWG switch keep both currencies.
 
 ## Zimbabwe school structure
 
@@ -309,7 +310,8 @@ app/
   static/js/           api client, UI kit, SVG charts, router, views/
 tests/                 business-rule and accounting tests
 ```
-#   s c h o o l f i n a n c i a l s y s t e m  
+#   s c h o o l f i n a n c i a l s y s t e m 
+ 
  
 ## Deploying on Render
 

@@ -1,4 +1,4 @@
-"""USD and ZWG recorded side by side (no conversion), daily rates, and split-currency payroll."""
+"""Currencies recorded side by side (no conversion), daily rates, and split-currency payroll."""
 from datetime import date, timedelta
 
 import pytest
@@ -39,7 +39,7 @@ def test_zwg_needs_dual_currency(app):
     b = login(app, "bursar", "Bursar@2026")
     st = Student.query.filter_by(status="active").first()
     r = b.post("/api/payments", json={"student_id": st.id, "amount": 100, "method": "cash", "currency": "ZWG"}, headers=H)
-    assert r.status_code == 400 and "dual currency" in r.json["error"]
+    assert r.status_code == 400 and "isn't one of this school's currencies" in r.json["error"]
 
 
 def test_turning_on_dual_currency(app):

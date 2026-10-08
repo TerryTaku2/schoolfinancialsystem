@@ -119,6 +119,7 @@ def upgrade_schema(engine):
     _rebuild_grade_bands(engine)
     _widen_unique(engine, "invoice", ["student_id", "term_id"])
     _widen_unique(engine, "payroll_remittance", ["run_id", "type"])
+    _widen_unique(engine, "exchange_rate", ["date"])  # one rate a day -> one per currency per day
     _add_missing_columns(engine)
 
 

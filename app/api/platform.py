@@ -20,7 +20,7 @@ from .auth import validate_password
 
 bp = Blueprint("platform", __name__)
 
-CURRENCIES = ("USD", "ZWG")
+from ..services.currency import CURRENCIES, catalog as currency_catalog  # noqa: E402
 _failed = defaultdict(deque)
 
 
@@ -107,7 +107,7 @@ def me():
     op = _require_operator()
     return jsonify(user={"username": op.username, "full_name": op.full_name},
                    school_types=[{"value": k, "label": v} for k, v in structure.SCHOOL_TYPES.items()],
-                   currencies=CURRENCIES)
+                   currencies=CURRENCIES, currency_catalog=currency_catalog())
 
 
 @bp.get("/platform/api/schools")
@@ -127,7 +127,7 @@ def provision_school(name, slug, school_type, currency, admin, demo=False):
     if school_type not in structure.SCHOOL_TYPES:
         raise ApiError("Invalid school type", fields={"school_type": "Invalid"})
     if currency not in CURRENCIES:
-        raise ApiError("Currency must be USD or ZWG", fields={"currency": "Invalid"})
+        raise ApiError(f"Currency must be one of {', '.join(CURRENCIES)}", fields={"currency": "Invalid"})
     username = str(admin.get("username") or "").strip().lower()
     if len(username) < 3 or not username.replace(".", "").replace("_", "").isalnum():
         raise ApiError("Administrator username: 3+ letters/numbers", fields={"admin_username": "Invalid"})

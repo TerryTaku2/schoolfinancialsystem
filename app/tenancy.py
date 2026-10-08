@@ -2,7 +2,7 @@
 
     /s/<school-code>/...    a school's own app (its pages, API, logins), backed by its own database
     /platform/...           the platform console, where operators create and manage schools
-    /                       a page asking for the school code
+    /                       sign-in by username and password; the school is found from the account
 
 How data is kept apart:
 - Each school's tables live in their own database: a SQLite file under instance/schools/, or a
@@ -193,7 +193,8 @@ class SchoolPrefixMiddleware:
                     location = environ.get("SCRIPT_NAME", "") + path + "/" + (f"?{query}" if query else "")
                     start_response("308 Permanent Redirect", [("Location", location), ("Content-Length", "0")])
                     return [b""]
-                environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + PREFIX + slug
+                environ["school.root"] = environ.get("SCRIPT_NAME", "")
+                environ["SCRIPT_NAME"] = environ["school.root"] + PREFIX + slug
                 environ["PATH_INFO"] = "/" + rest
                 environ["school.slug"] = slug.lower()
         return self.app(environ, start_response)
@@ -212,14 +213,14 @@ def resolve_school():
     slug = request.environ.get("school.slug")
     multi = current_app.config.get("MULTI_SCHOOL")
     if slug is None:
-        if multi and not (request.path in ("/", "/sw.js", "/manifest.webmanifest") or request.path.startswith(("/platform", "/static/"))):
+        if multi and not (request.path in ("/", "/sw.js", "/manifest.webmanifest", "/api/auth/find-school") or request.path.startswith(("/platform", "/static/"))):
             return _not_found("Open your school's own address, for example /s/your-school-code/")
         return None
     if not multi:
         return _not_found("Not found")
     row = get_school(slug)
     if row is None:
-        return _not_found("No school uses that code. Check the address you were given.")
+        return _not_found("That school address doesn't exist. Sign in below and we'll take you to your school.")
     if row.status != "active":
         return _not_found("This school's account is suspended. Please contact the platform administrator.")
     g.school = _snapshot(row)

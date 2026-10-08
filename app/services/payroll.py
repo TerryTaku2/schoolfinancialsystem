@@ -181,30 +181,43 @@ def _bonus_exempt_used(slip):
     return sum(json.loads(s.detail or "{}").get("bonus_exempt", 0) for s in q)
 
 
+def run_rates(run):
+    """{currency: units per 1 USD} the run was calculated with (USD itself is 1)."""
+    rates = json.loads(run.exchange_rates) if run.exchange_rates else {}
+    if not rates and run.exchange_rate:
+        rates = {"ZWG": run.exchange_rate}  # run from the two-currency version
+    return {fx.ANCHOR: 1, **rates}
+
+
 def _converter(run, tax_cur):
     """Functions converting between a component's currency and the tax table's currency at the
-    run's exchange rate (ZWG per USD), as ZIMRA requires for pay split across currencies."""
-    rate = Decimal(str(run.exchange_rate)) if run.exchange_rate else None
+    run's exchange rates (units per 1 USD), as ZIMRA requires for pay split across currencies."""
+    rates = run_rates(run)
 
-    def need():
-        if rate is None:
-            raise ApiError(f"Pay for {run.period} includes more than one currency. Enter the USD/ZWG exchange rate "
-                           f"for {run.pay_date.isoformat()} (or earlier) and recalculate.", 409)
-        return rate
+    def need(cur):
+        if cur not in rates:
+            raise ApiError(f"Pay for {run.period} includes more than one currency. Enter the {cur} exchange rate "
+                           f"(per 1 USD) for {run.pay_date.isoformat()} or earlier, then recalculate.", 409)
+        return Decimal(str(rates[cur]))
 
     def to_tax(cents, cur):
         if cur == tax_cur:
             return cents
-        r = need()
-        return _round(Decimal(cents) / r) if cur == "ZWG" else _round(Decimal(cents) * r)
+        return _round(Decimal(cents) * need(tax_cur) / need(cur))
 
     def from_tax(cents, cur):
         if cur == tax_cur:
             return cents
-        r = need()
-        return _round(Decimal(cents) * r) if cur == "ZWG" else _round(Decimal(cents) / r)
+        return _round(Decimal(cents) * need(cur) / need(tax_cur))
 
     return to_tax, from_tax
+
+
+def rates_text(run, currencies):
+    """e.g. "1 USD = 26.75 ZWG and 18.4 ZAR" for the currencies a payslip involves."""
+    rates = run_rates(run)
+    parts = [f"{rates[c]:g} {c}" for c in currencies if c != fx.ANCHOR and c in rates]
+    return f"1 USD = {' and '.join(parts)}" if parts else ""
 
 
 def _split(total, weights):
@@ -344,7 +357,7 @@ def calculate(slip, cfg):
     if len(parts) > 1:
         share = ", ".join(f"{c} {gross_t.get(c, 0) / gross * 100:.1f}%" for c, _ in parts if gross)
         notes.append(f"Pay in {' and '.join(c for c, _ in parts)}: tax worked out on the total in {tax_cur} at "
-                     f"1 USD = {run.exchange_rate:g} ZWG and withheld in proportion to pay ({share}).")
+                     f"{rates_text(run, [tax_cur] + [c for c, _ in parts])} and withheld in proportion to pay ({share}).")
     slip.detail = json.dumps({
         "tax_currency": tax_cur,
         "earnings": earnings, "deductions": [d for d in statutory + deductions if d[1]],
@@ -385,8 +398,9 @@ def create_run(period, pay_date, notes, user_id):
 def recalculate(run, slips=None):
     if run.status != "draft":
         raise ApiError("Only draft payrolls can be recalculated", 409)
-    r = fx.rate_on(run.pay_date)
-    run.exchange_rate = r.zwg_per_usd if r else None
+    rates = {c: r.per_usd for c, r in fx.latest_rates(run.pay_date).items()}
+    run.exchange_rates = json.dumps(rates) if rates else None
+    run.exchange_rate = rates.get("ZWG")
     cfg = json.loads(run.tax_table.config)
     for slip in slips or run.payslips:
         calculate(slip, cfg)
@@ -562,7 +576,8 @@ def payslip_dict(p, detail=False):
                  pension_deductible=money(raw.get("pension_deductible", 0)),
                  bank_name=st.bank_name, bank_account=st.bank_account, department=st.department,
                  period=p.run.period, pay_date=p.run.pay_date.isoformat(), run_no=p.run.run_no,
-                 tax_currency=tax_cur, exchange_rate=p.run.exchange_rate, ytd=year_to_date(p))
+                 tax_currency=tax_cur, exchange_rate=p.run.exchange_rate,
+                 exchange_rates={c: r for c, r in run_rates(p.run).items() if c != fx.ANCHOR}, ytd=year_to_date(p))
     return d
 
 
@@ -595,6 +610,7 @@ def run_dict(run, detail=False):
          "paid_at": run.paid_at.isoformat() if run.paid_at else None,
          "void_reason": run.void_reason, "zimra_due": zimra_due_date(run.period).isoformat(),
          "tax_currency": json.loads(run.tax_table.config).get("currency", "USD"), "exchange_rate": run.exchange_rate,
+         "exchange_rates": {c: r for c, r in run_rates(run).items() if c != fx.ANCHOR},
          "totals": {k: (v if k == "employees" else money(v)) for k, v in t.items()},
          "by_currency": [{"currency": c, **{k: money(v) for k, v in x.items()}} for c, x in ct.items()]}
     if detail:

@@ -418,6 +418,9 @@ def seed_demo(students_per_class=14, rng_seed=42, school_type="primary"):
     return {"students": len(students), "classes": len(classes), "teachers": len(teachers)}
 
 
+from .services.currency import CURRENCIES as CURRENCY_CODES  # noqa: E402
+
+
 def register_cli(app):
     from contextlib import nullcontext
 
@@ -499,7 +502,7 @@ def register_cli(app):
     @click.option("--code", "slug", prompt="School code (used in the address)")
     @click.option("--name", prompt="School name")
     @click.option("--type", "school_type", type=click.Choice(sorted(structure.SCHOOL_TYPES)), prompt=True)
-    @click.option("--currency", type=click.Choice(["USD", "ZWG"]), default="USD", show_default=True)
+    @click.option("--currency", type=click.Choice(list(CURRENCY_CODES)), default="USD", show_default=True)
     @click.option("--admin-username", default="admin", show_default=True)
     @click.option("--admin-password", prompt=True, hide_input=True, confirmation_prompt=True)
     @click.option("--demo", is_flag=True, help="Fill the school with demo data")
@@ -517,7 +520,7 @@ def register_cli(app):
     @click.option("--name", prompt="School name")
     @click.option("--database-url", prompt=True, help="e.g. sqlite:///C:/path/instance/school.db")
     @click.option("--schema", default=None, help="PostgreSQL schema holding the tables, if any")
-    @click.option("--currency", type=click.Choice(["USD", "ZWG"]), default="USD", show_default=True)
+    @click.option("--currency", type=click.Choice(list(CURRENCY_CODES)), default="USD", show_default=True)
     def adopt_school(slug, name, database_url, schema, currency):
         """Register an existing single-school database as a school (multi-school mode).
 

@@ -428,37 +428,71 @@ def expense_status(eid):
 
 
 # --------------------------------------------------------------------------- #
-# Exchange rates (the bursar records the day's USD/ZWG rate)
+# Exchange rates (the bursar records each day's rates against the US dollar)
 # --------------------------------------------------------------------------- #
 @bp.get("/rates")
 @login_required
 def list_rates():
     from ..models import ExchangeRate
-    rows = ExchangeRate.query.order_by(ExchangeRate.date.desc()).limit(120).all()
-    latest = fx.rate_on()
-    return jsonify(items=[fx.rate_dict(r) for r in rows], latest=fx.rate_dict(latest) if latest else None,
-                   base=fx.base(), currencies=fx.enabled())
+    q = ExchangeRate.query
+    cur = (request.args.get("currency") or "").upper()
+    if cur:
+        q = q.filter(ExchangeRate.currency == cur)
+    rows = q.order_by(ExchangeRate.date.desc(), ExchangeRate.currency).limit(240).all()
+    latest = fx.latest_rates()
+    return jsonify(items=[fx.rate_dict(r) for r in rows],
+                   latest={c: fx.rate_dict(r) for c, r in latest.items()},
+                   rate_currencies=fx.rate_currencies(), base=fx.base(), currencies=fx.enabled(),
+                   anchor=fx.ANCHOR)
 
 
 @bp.post("/rates")
 @permission_required("payments.manage")
 def save_rate():
-    """Record (or correct) the rate for a day: how many ZWG make 1 USD."""
+    """Record (or correct) a day's rates: units of each currency for 1 USD.
+
+    Body: {"date", "currency": "ZAR", "rate": 18.4} for one currency, or
+    {"date", "rates": {"ZWG": 26.75, "ZAR": 18.4}} for several at once.
+    ({"zwg_per_usd": 26.75} from the two-currency version still works.)
+    """
     from ..models import ExchangeRate
     from ..utils import parse_float
     data = body()
-    require(data, "zwg_per_usd")
     on = parse_date(data.get("date"), "date", required=False) or date.today()
     if on > date.today():
         raise ApiError("Rates can't be entered for future dates", fields={"date": "Future date"})
-    rate = parse_float(data["zwg_per_usd"], "zwg_per_usd", minimum=0.0001, maximum=1_000_000)
-    r = ExchangeRate.query.filter_by(date=on).first()
-    old = r.zwg_per_usd if r else None
-    if r is None:
-        r = ExchangeRate(date=on, zwg_per_usd=rate)
-        db.session.add(r)
-    r.zwg_per_usd, r.source, r.entered_by = rate, clean_str(data.get("source"), 60) or "RBZ interbank", current_user.id
-    db.session.flush()
-    audit("rate", "exchange_rate", r.id, f"{on.isoformat()}: 1 USD = {rate:g} ZWG" + (f" (was {old:g})" if old else ""))
+    if isinstance(data.get("rates"), dict):
+        given = data["rates"]
+    elif "zwg_per_usd" in data and "rate" not in data:
+        given = {"ZWG": data["zwg_per_usd"]}
+    else:
+        need = fx.rate_currencies()
+        cur = (data.get("currency") or (need[0] if len(need) == 1 else "")).strip().upper()
+        if not cur:
+            raise ApiError("Choose the currency this rate is for", fields={"currency": "Required"})
+        require(data, "rate")
+        given = {cur: data["rate"]}
+    given = {str(c).strip().upper(): v for c, v in given.items() if v not in (None, "")}
+    if not given:
+        raise ApiError("Enter at least one rate", fields={"rate": "Required"})
+    saved = []
+    for cur, value in given.items():
+        if cur == fx.ANCHOR:
+            raise ApiError("Rates are quoted per 1 USD, so USD itself doesn't need one", fields={"currency": "Invalid"})
+        if cur not in fx.enabled():
+            raise ApiError(f"{cur} isn't one of this school's currencies", fields={"currency": "Not enabled"})
+        rate = parse_float(value, "rate", minimum=0.000001, maximum=10_000_000)
+        r = ExchangeRate.query.filter_by(date=on, currency=cur).first()
+        old = r.per_usd if r else None
+        if r is None:
+            r = ExchangeRate(date=on, currency=cur, per_usd=rate)
+            db.session.add(r)
+        r.per_usd, r.source, r.entered_by = rate, clean_str(data.get("source"), 60) or "RBZ interbank", current_user.id
+        db.session.flush()
+        audit("rate", "exchange_rate", r.id,
+              f"{on.isoformat()}: 1 USD = {rate:g} {cur}" + (f" (was {old:g})" if old else ""))
+        saved.append(r)
     db.session.commit()
-    return jsonify(fx.rate_dict(r)), 201
+    if len(saved) == 1:
+        return jsonify(fx.rate_dict(saved[0])), 201
+    return jsonify(items=[fx.rate_dict(r) for r in saved]), 201

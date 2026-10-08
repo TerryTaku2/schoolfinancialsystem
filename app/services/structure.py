@@ -131,10 +131,10 @@ def set_school_type(value):
 def profile():
     t = school_type()
     from . import currency as fx
-    r = fx.rate_on()
-    return {"name": school_name(), "currency": currency(), "currencies": fx.enabled(), "dual_currency": fx.is_dual(),
-            "demo": is_demo(),
-            "rate": fx.rate_dict(r) if r else None, "school_type": t,
+    rates = {c: fx.rate_dict(r) for c, r in fx.latest_rates().items()}
+    return {"name": school_name(), "currency": currency(), "currencies": fx.enabled(), "dual_currency": fx.is_multi(),
+            "currency_catalog": fx.catalog(), "rate_currencies": fx.rate_currencies(), "demo": is_demo(),
+            "rates": rates, "rate": rates.get("ZWG"), "school_type": t,
             "school_type_label": SCHOOL_TYPES[t], "sections": sections_for(t),
             "levels": [{"code": c, "label": LONG_LABEL[c], "order": ORDER[c], "section": SECTION[c]}
                        for c in codes_for(t)]}

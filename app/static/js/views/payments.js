@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { rerender } from "../app.js";
-import { badge, baseCurrency, confirmDialog, currencies, debounce, downloadCSV, esc, fmtDate, handleError, has, icon, isDual, modal, money, moneyList, pager, selectHtml, showFieldErrors, state, table, toast, today } from "../ui.js";
+import { badge, baseCurrency, confirmDialog, currencies, currencyOptions, debounce, downloadCSV, esc, fmtDate, handleError, has, icon, isDual, modal, money, moneyList, pager, selectHtml, showFieldErrors, state, table, toast, today } from "../ui.js";
 import { openReceipt } from "./docs.js";
 
 /** Payment entry dialog. Pass a student {id, name, balance, balances} or null to search for one. */
@@ -22,7 +22,7 @@ export function recordPaymentModal(student = null) {
           <small class="err" data-err="student_id"></small></div>
         <div id="acct" class="notice ${chosen && chosen.balance > 0 ? "warn" : ""}" style="${chosen ? "" : "display:none"}">${chosen ? balanceText(chosen) : ""}</div>
         <div class="cols">
-          ${isDual() ? `<label class="field"><span>Currency received *</span>${selectHtml("currency", currencies().map((c) => ({ value: c, label: c === "ZWG" ? "ZWG (ZiG)" : c })), baseCurrency())}<small class="hint">Recorded as received; clears invoices in this currency only</small></label>` : ""}
+          ${isDual() ? `<label class="field"><span>Currency received *</span>${selectHtml("currency", currencyOptions(), baseCurrency())}<small class="hint">Recorded as received; clears invoices in this currency only</small></label>` : ""}
           <label class="field"><span>Amount *</span><input class="input" name="amount" type="number" min="0.01" step="0.01" required><small class="err" data-err="amount"></small></label>
           <label class="field"><span>Date received *</span><input class="input" name="paid_on" type="date" value="${today()}" max="${today()}"><small class="err" data-err="paid_on"></small></label>
           <label class="field"><span>Method *</span>${selectHtml("method", methods, "cash")}<small class="err" data-err="method"></small></label>

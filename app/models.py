@@ -7,6 +7,7 @@ from datetime import datetime, date
 
 from flask_login import UserMixin
 from sqlalchemy import UniqueConstraint, CheckConstraint
+from sqlalchemy.orm import synonym
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from . import db
@@ -764,8 +765,11 @@ class PayrollRun(TimestampMixin, db.Model):
     paid_from_account_id = db.Column(db.Integer, db.ForeignKey("account.id"))
     # {"USD": account_id, "ZWG": account_id}: where each currency's net pay was paid from
     paid_accounts = db.Column(db.Text)
-    # ZWG per 1 USD used to work out PAYE when pay is in both currencies (ZIMRA apportionment)
+    # Rates used to work out PAYE when pay is in more than one currency (ZIMRA apportionment):
+    # exchange_rates is {"ZWG": 26.75, "ZAR": 18.4} (units per 1 USD); exchange_rate is the ZWG
+    # rate alone, as stored by the two-currency version.
     exchange_rate = db.Column(db.Float)
+    exchange_rates = db.Column(db.Text)
     void_reason = db.Column(db.String(200))
     voided_at = db.Column(db.Date)
 
@@ -911,21 +915,27 @@ class PayslipCurrency(db.Model):
 
 
 class ExchangeRate(db.Model):
-    """The day's exchange rate entered by the bursar: units of ZWG for 1 USD.
+    """A day's exchange rate entered by the bursar: units of `currency` for 1 USD.
 
+    One row per currency per day (ZWG 26.75, ZAR 18.40, ...); any pair converts through USD.
     Used only for combined totals and for PAYE on pay split across currencies;
     transactions themselves are always recorded in the currency they happened in.
     """
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.Date, nullable=False, unique=True, index=True)
-    zwg_per_usd = db.Column(db.Float, nullable=False)
+    date = db.Column(db.Date, nullable=False, index=True)
+    # Rows from the two-currency version have no currency: they were all ZWG (filled in on upgrade).
+    currency = db.Column(db.String(3), index=True, default="ZWG")
+    # The column keeps its original name so existing rates carry over unchanged.
+    per_usd = db.Column("zwg_per_usd", db.Float, nullable=False)
+    zwg_per_usd = synonym("per_usd")
     source = db.Column(db.String(60))
     entered_by = db.Column(db.Integer, db.ForeignKey("user.id"))
     created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
 
     author = db.relationship("User")
 
-    __table_args__ = (CheckConstraint("zwg_per_usd > 0", name="ck_rate_positive"),)
+    __table_args__ = (CheckConstraint("zwg_per_usd > 0", name="ck_rate_positive"),
+                      UniqueConstraint("date", "currency", name="uq_rate_day_currency"))
 
 
 # --------------------------------------------------------------------------- #

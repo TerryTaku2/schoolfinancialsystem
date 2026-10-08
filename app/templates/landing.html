@@ -3,31 +3,71 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Find your school · School Management</title>
+  <title>Sign in · School Management</title>
+  {% set root = request.environ.get('school.root', request.script_root) %}
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M6 13l10-5 10 5-10 5z' fill='white'/%3E%3Cpath d='M10 16v5c3 2 9 2 12 0v-5' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="stylesheet" href="{{ root }}/static/css/app.css">
   <script>
     try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
 </head>
 <body>
   <div class="login-wrap">
-    <form class="login-card" id="find" novalidate>
+    <form class="login-card" id="login-form" novalidate>
       <div class="brand"><div class="logo">SM</div><div><h1>School Management</h1><div class="muted">Sign in to your school</div></div></div>
-      {% if error %}<div class="notice warn" style="margin-bottom:14px">{{ error }}</div>{% endif %}
-      <div class="form">
-        <label class="field"><span>School code</span><input class="input" name="code" autocomplete="organization" required autofocus placeholder="e.g. greenfield-primary"></label>
-        <button class="btn primary" type="submit" style="height:40px">Continue</button>
+      <div class="notice warn" id="msg" style="margin-bottom:14px"{% if not error %} hidden{% endif %}>{{ error or "" }}</div>
+      <div class="form" id="creds">
+        <label class="field"><span>Username</span><input class="input" name="username" autocomplete="username" required autofocus></label>
+        <label class="field"><span>Password</span><input class="input" name="password" type="password" autocomplete="current-password" required></label>
+        <label class="check"><input type="checkbox" name="remember"> Keep me signed in</label>
+        <button class="btn primary" type="submit" style="height:40px">Sign in</button>
       </div>
-      <p class="muted small" style="margin-top:18px">Your school's code is part of the address you were given, e.g. <code>{{ request.host_url }}s/<b>your-school</b>/</code>. Bookmark that address to come straight to your school.</p>
-      <p class="small"><a href="{{ request.script_root }}/platform/">Platform console</a></p>
+      <div class="form" id="pick" hidden></div>
+      <p class="small" style="margin-top:18px"><a href="{{ root }}/platform/">Platform console</a></p>
     </form>
   </div>
   <script>
-    document.getElementById("find").addEventListener("submit", (e) => {
+    const ROOT = {{ root | tojson }};
+    const form = document.getElementById("login-form");
+    const msg = document.getElementById("msg");
+    const show = (text) => { msg.textContent = text; msg.hidden = !text; };
+    const post = async (url, data) => {
+      const res = await fetch(url, { method: "POST", credentials: "same-origin",
+        headers: { "X-Requested-With": "SchoolMS", "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      let payload = {};
+      try { payload = await res.json(); } catch (e) {}
+      if (!res.ok) throw new Error(payload.error || `Sign-in failed (${res.status})`);
+      return payload;
+    };
+    const creds = () => ({ username: form.username.value, password: form.password.value, remember: form.remember.checked });
+    // Sign in at the school's own address so its cookies are scoped to that school, then open it.
+    const enter = async (school) => {
+      await post(`${ROOT}/s/${encodeURIComponent(school.slug)}/api/auth/login`, creds());
+      location.href = school.url;
+    };
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const code = e.target.code.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-      if (code) location.href = "{{ request.script_root }}/s/" + encodeURIComponent(code) + "/";
+      const btn = form.querySelector('[type="submit"]');
+      btn.disabled = true;
+      show("");
+      try {
+        const { schools } = await post(`${ROOT}/api/auth/find-school`, creds());
+        if (schools.length === 1) return await enter(schools[0]);
+        // The same username and password work at several schools: let the user choose.
+        const pick = document.getElementById("pick");
+        pick.innerHTML = '<div class="muted">This account belongs to more than one school. Which one?</div>';
+        for (const s of schools) {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "btn"; b.textContent = s.name;
+          b.onclick = () => enter(s).catch((err) => show(err.message));
+          pick.appendChild(b);
+        }
+        document.getElementById("creds").hidden = true;
+        pick.hidden = false;
+      } catch (err) {
+        show(err.message);
+        btn.disabled = false;
+      }
     });
   </script>
 </body>

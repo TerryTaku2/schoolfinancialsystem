@@ -715,15 +715,19 @@ def update_school_profile():
     if "demo_login" in data:
         structure.set_demo(bool(data["demo_login"]))
         audit("update", "school", None, f"demo sign-in without passwords {'on' if data['demo_login'] else 'off'}")
-    if "dual_currency" in data:
+    if "currencies" in data or "dual_currency" in data:
         from ..services import currency as fx
-        if fx.is_dual() and not data["dual_currency"]:
-            other = fx.other(fx.base())
-            from ..models import JournalEntry
-            if JournalEntry.query.filter_by(currency=other).first():
-                raise ApiError(f"There are {other} transactions on record, so dual currency can't be switched off.", 409)
-        fx.set_dual(bool(data["dual_currency"]))
-        audit("update", "school", None, f"dual currency {'on' if data['dual_currency'] else 'off'}")
+        before = fx.enabled()
+        if "currencies" in data:
+            if not isinstance(data["currencies"], list):
+                raise ApiError('currencies must be a list such as ["USD", "ZWG", "ZAR"]',
+                               fields={"currencies": "Invalid"})
+            fx.set_enabled(data["currencies"])
+        else:
+            fx.set_dual(bool(data["dual_currency"]))
+        after = fx.enabled()
+        if after != before:
+            audit("update", "school", None, f"currencies {', '.join(before)} -> {', '.join(after)}")
     old, new = structure.school_type(), data.get("school_type") or structure.school_type()
     structure.set_school_type(new)
     dropped = set(structure.codes_for(old)) - set(structure.codes_for(new))

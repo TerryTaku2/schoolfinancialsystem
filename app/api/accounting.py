@@ -262,10 +262,10 @@ def cash_flow():
 def get_settings():
     lock = ledger.get_lock_date()
     start, end = _fiscal_year()
-    r = fx.rate_on()
+    rates = {c: fx.rate_dict(r) for c, r in fx.latest_rates().items()}
     return jsonify(lock_date=lock.isoformat() if lock else None, fiscal_start=start.isoformat(),
                    fiscal_end=end.isoformat(), base_currency=fx.base(), currencies=fx.enabled(),
-                   rate=fx.rate_dict(r) if r else None,
+                   rates=rates, rate=rates.get("ZWG"),
                    cash_accounts=[ledger.account_dict(a) for a in ledger.cash_accounts()])
 
 

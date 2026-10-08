@@ -85,7 +85,7 @@ async function newSchool(me) {
       { name: "name", label: "School name", required: true, full: true, placeholder: "e.g. Chiedza Primary School" },
       { name: "slug", label: "School code (in the address)", required: true, placeholder: "chiedza-primary", hint: "Lowercase letters, numbers and hyphens. Can't be changed later." },
       { name: "school_type", label: "School type", type: "select", required: true, options: me.school_types, default: "primary" },
-      { name: "currency", label: "Currency", type: "select", required: true, options: me.currencies, default: "USD", hint: "Fees, payroll and the books are kept in this currency" },
+      { name: "currency", label: "Currency", type: "select", required: true, options: (me.currency_catalog || me.currencies.map((c) => ({ code: c, label: c }))).map((c) => ({ value: c.code, label: c.code === c.label ? c.code : `${c.code} · ${c.label}` })), default: "USD", hint: "Fees, payroll and the books are kept in this currency" },
       { name: "demo", label: "Fill with demo data (for training or trying it out)", type: "checkbox" },
       { type: "heading", name: "_h", label: "First administrator" },
       { name: "admin_full_name", label: "Full name", placeholder: "e.g. the head or bursar" },
