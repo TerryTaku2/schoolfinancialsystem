@@ -67,13 +67,28 @@ async function load() {
       { key: "storage", label: "Database" },
       { key: "created_at", label: "Created", render: (s) => fmtDate(s.created_at) },
       { key: "status", label: "Status", render: (s) => s.preparing ? badge("pending", "Preparing demo data…") : badge(s.status === "active" ? "active" : "blocked", s.status) },
-      { key: "id", label: "", sort: false, cls: "actions", render: (s) => s.preparing ? `<span class="muted small">Opens when ready</span>` : `<button class="btn sm" data-rename="${s.id}">Rename</button> <button class="btn sm ${s.status === "active" ? "danger" : ""}" data-status="${s.id}">${s.status === "active" ? "Suspend" : "Reactivate"}</button>` },
+      { key: "id", label: "", sort: false, cls: "actions", render: (s) => s.preparing ? `<span class="muted small">Opens when ready</span>` : `<button class="btn sm" data-rename="${s.id}">Rename</button> <button class="btn sm" data-pw="${s.id}">Reset admin password</button> <button class="btn sm ${s.status === "active" ? "danger" : ""}" data-status="${s.id}">${s.status === "active" ? "Suspend" : "Reactivate"}</button>` },
     ],
   });
   $("#tbl").querySelectorAll("[data-rename]").forEach((b) => (b.onclick = async () => {
     const s = r.items.find((x) => x.id === +b.dataset.rename);
     if (await formModal({ title: `Rename ${s.name}`, cols: 1, values: s, fields: [{ name: "name", label: "School name", required: true }],
       onSubmit: (d) => call("PUT", `/schools/${s.id}`, d) })) { toast("Renamed", "success"); load(); }
+  }));
+  $("#tbl").querySelectorAll("[data-pw]").forEach((b) => (b.onclick = async () => {
+    const s = r.items.find((x) => x.id === +b.dataset.pw);
+    let admins;
+    try { admins = (await call("GET", `/schools/${s.id}/admins`)).items; } catch (err) { return handleError(err); }
+    if (!admins.length) return toast(`${s.name} has no administrator accounts`, "error");
+    const res = await formModal({
+      title: `Reset admin password · ${s.name}`, cols: 1, submitText: "Reset password",
+      intro: `<p style="margin-top:0" class="muted">For a school administrator who forgot their password. Give them the temporary password in person or by phone; they must choose their own when they next sign in. Other staff are reset by the school's own administrators (Users &amp; Permissions).</p>`,
+      fields: [{ name: "username", label: "Administrator", type: "select", required: true, default: (admins.find((a) => a.reset_requested) || admins[0]).username,
+          options: admins.map((a) => ({ value: a.username, label: `${a.username} · ${a.full_name}${a.reset_requested ? " (asked for a reset)" : ""}${a.active ? "" : " (disabled)"}` })) },
+        { name: "password", label: "Temporary password", type: "password", required: true, hint: "8+ characters mixing letters and numbers" }],
+      onSubmit: (d) => call("POST", `/schools/${s.id}/reset-password`, d),
+    });
+    if (res) toast(`Password reset for ${res.username} at ${s.name}`, "success");
   }));
   $("#tbl").querySelectorAll("[data-status]").forEach((b) => (b.onclick = async () => {
     const s = r.items.find((x) => x.id === +b.dataset.status);

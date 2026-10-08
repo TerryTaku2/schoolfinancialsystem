@@ -72,6 +72,23 @@ export function today() { return state.meta?.today || new Date().toISOString().s
 
 export function initials(name) { return (name || "?").split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase(); }
 
+// The school's uploaded logo, or null. The version in the URL changes whenever the logo does.
+const APP_ROOT = document.querySelector('meta[name="app-root"]')?.content || "";
+export function logoUrl() {
+  const v = state.meta?.logo_version;
+  return v ? `${APP_ROOT}/api/school/logo?v=${v}` : null;
+}
+// The logo where the app shows the school's badge; initials until a logo is uploaded.
+export function schoolMark(name) {
+  const url = logoUrl();
+  return url ? `<img class="logo logo-img" src="${esc(url)}" alt="">` : `<div class="logo">${esc(initials(name))}</div>`;
+}
+// The logo at the top left of every printable document.
+export function docLogo() {
+  const url = logoUrl();
+  return url ? `<img class="doc-logo" src="${esc(url)}" alt="">` : "";
+}
+
 const BADGE = {
   paid: "good", active: "good", present: "good", approved: "accent", promote: "good",
   partial: "warn", pending: "warn", late: "warn", on_leave: "warn", suspended: "warn",
@@ -133,6 +150,7 @@ const P = {
   ledger: "M18 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2M6 4h5v8l-2.5-1.5L6 12z",
   print: "M19 8H5c-1.7 0-3 1.3-3 3v6h4v4h12v-4h4v-6c0-1.7-1.3-3-3-3m-3 11H8v-5h8zm3-7c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1m-1-9H6v4h12z",
   download: "M5 20h14v-2H5zM19 9h-4V3H9v6H5l7 7z",
+  upload: "M5 20h14v-2H5zm0-10h4v6h6v-6h4l-7-7z",
   menu: "M3 18h18v-2H3zm0-5h18v-2H3zm0-7v2h18V6z",
   moon: "M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.4A5.5 5.5 0 0 1 13.4 3.1 9 9 0 0 0 12 3",
   logout: "M10.1 15.6 11.5 17l5-5-5-5-1.4 1.4 2.6 2.6H3v2h9.7zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2",

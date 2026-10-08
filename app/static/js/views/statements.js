@@ -1,7 +1,7 @@
 // Financial statements: income statement, balance sheet, cash flow, trial balance.
 import { api } from "../api.js";
 import { navigate } from "../app.js";
-import { baseCurrency, currencies, downloadCSV, esc, fmtDate, icon, isDual, selectHtml, state, today } from "../ui.js";
+import { baseCurrency, currencies, docLogo, downloadCSV, esc, fmtDate, icon, isDual, selectHtml, state, today } from "../ui.js";
 
 const NUM = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Accounting format: negatives in brackets, zero as a dash.
@@ -28,9 +28,9 @@ export default async function (el, [tabParam]) {
   let tab = tabs.some(([k]) => k === tabParam) ? tabParam : "income";
 
   el.innerHTML = `
-    <div class="page-head"><div><h1>Financial Statements</h1><p>Prepared automatically from the double-entry general ledger${settings.lock_date ? ` · books closed to ${fmtDate(settings.lock_date)}` : ""}</p></div>
+    <div class="page-head no-print"><div><h1>Financial Statements</h1><p>Prepared automatically from the double-entry general ledger${settings.lock_date ? ` · books closed to ${fmtDate(settings.lock_date)}` : ""}</p></div>
       <div class="page-actions"><button class="btn" id="csv">${icon("download")} CSV</button><button class="btn" id="print">${icon("print")} Print</button></div></div>
-    <div class="card" style="margin-bottom:16px"><div class="toolbar" style="border:0">
+    <div class="card no-print" style="margin-bottom:16px"><div class="toolbar" style="border:0">
       ${isDual() ? selectHtml("currency", currencyOptions, p.currency) : ""}
       ${selectHtml("preset", presets.map((x) => ({ value: x.value, label: x.label })), p.preset)}
       <label class="row small muted">From <input class="input" type="date" name="from" value="${p.from}"></label>
@@ -38,12 +38,12 @@ export default async function (el, [tabParam]) {
       <label class="check small"><input type="checkbox" name="compare" checked> Comparative figures</label>
       <span style="flex:1"></span><span id="check"></span>
     </div></div>
-    <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? "active" : ""}">${l}</button>`).join("")}</div>
+    <div class="tabs no-print">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? "active" : ""}">${l}</button>`).join("")}</div>
     <div id="pane"></div>`;
   const pane = el.querySelector("#pane");
   let csv = { name: "statement", rows: [] };
 
-  const header = (title, sub) => `<div class="doc-head"><div><h2>${esc(state.meta.school)}</h2><div class="muted">${esc(title)}</div></div>
+  const header = (title, sub) => `<div class="doc-head">${docLogo()}<div><h2>${esc(state.meta.school)}</h2><div class="muted">${esc(title)}</div></div>
     <div style="text-align:right"><div class="muted">${sub}</div><div class="muted small">${p.currency === "ALL"
       ? `Combined: ${esc(currencies().filter((c) => c !== baseCurrency()).join(", "))} translated into ${esc(baseCurrency())} at the rate on the report date`
       : `Amounts in ${esc(p.currency)}`}</div></div></div>`;

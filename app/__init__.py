@@ -183,6 +183,16 @@ def create_app(config_object="config.Config"):
             if request.headers.get("X-Requested-With") != "SchoolMS":
                 return jsonify(error="Missing CSRF header"), 403
 
+    @app.before_request
+    def temporary_password_guard():
+        # After a reset the user must choose their own password before using anything else.
+        from flask_login import current_user
+        if not request.path.startswith("/api/") or request.path.startswith(("/api/auth/", "/api/integration/")) \
+                or request.path == "/api/meta":
+            return None
+        if current_user.is_authenticated and getattr(current_user, "must_change_password", False):
+            return jsonify(error="Choose a new password first", must_change_password=True), 403
+
     @app.after_request
     def security_headers(resp):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")

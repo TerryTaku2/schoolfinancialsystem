@@ -1,6 +1,6 @@
 // Printable documents: receipt, invoice, statement, report card.
 import { api } from "../api.js";
-import { badge, esc, fmtDate, handleError, icon, modal, money, pct, printModal, state } from "../ui.js";
+import { badge, docLogo, esc, fmtDate, handleError, icon, modal, money, pct, printModal, state } from "../ui.js";
 
 const school = () => state.meta?.school || document.getElementById("root").dataset.school;
 
@@ -14,7 +14,7 @@ function docModal(title, html) {
 }
 
 function header(title, sub) {
-  return `<div class="doc-head"><div><h2>${esc(school())}</h2><div class="muted">School Management System</div></div>
+  return `<div class="doc-head">${docLogo()}<div><h2>${esc(school())}</h2><div class="muted">School Management System</div></div>
     <div style="text-align:right"><h2>${esc(title)}</h2><div class="muted">${sub}</div></div></div>`;
 }
 

@@ -46,6 +46,10 @@ class User(UserMixin, TimestampMixin, db.Model):
     # Per-person adjustments to the role's permissions (comma-separated codes).
     extra_permissions = db.Column(db.Text)
     removed_permissions = db.Column(db.Text)
+    # Set when someone else chose this password (a reset): the user must pick their own at next sign-in.
+    must_change_password = db.Column(db.Boolean)
+    # When the user last used "Forgot password?"; shown to administrators until the password is reset.
+    reset_requested_at = db.Column(db.DateTime)
 
     custom_role = db.relationship("Role")
 
@@ -80,6 +84,8 @@ class User(UserMixin, TimestampMixin, db.Model):
             "removed_permissions": perms.split(self.removed_permissions),
             "permissions": sorted(perms.permissions_for(self)),
             "last_login": self.last_login.isoformat() if self.last_login else None,
+            "must_change_password": bool(self.must_change_password),
+            "reset_requested_at": self.reset_requested_at.isoformat() if self.reset_requested_at else None,
             "staff_id": self.staff.id if self.staff else None,
             "guardian_id": self.guardian.id if self.guardian else None,
         }
@@ -606,6 +612,14 @@ class JournalLine(db.Model):
 class Setting(db.Model):
     key = db.Column(db.String(40), primary_key=True)
     value = db.Column(db.String(200))
+
+
+class SchoolLogo(db.Model):
+    """The school's logo (a single row), shown in the app and on every printed document."""
+    id = db.Column(db.Integer, primary_key=True)
+    mime = db.Column(db.String(40), nullable=False)
+    data = db.Column(db.LargeBinary, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
 # --------------------------------------------------------------------------- #

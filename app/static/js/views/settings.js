@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { refreshMeta } from "../app.js";
-import { badge, confirmDialog, esc, fmtDate, formModal, handleError, has, icon, selectHtml, table, toast } from "../ui.js";
+import { badge, confirmDialog, esc, fmtDate, formModal, handleError, has, icon, logoUrl, selectHtml, table, toast } from "../ui.js";
 
 // "1 USD = 26.75 ZWG · 18.4 ZAR (7 Oct 2026)"
 const ratesText = (rates, order = []) => {
@@ -52,6 +52,13 @@ export default async function (el) {
         <label class="check"><input type="checkbox" name="create_classes" checked> Create one class for each newly offered level</label>
         <div class="row"><button class="btn primary">Save school type</button></div></form>
       <p class="muted small">Changing the type adds the new levels' curriculum subjects and grading scales. Levels can only be removed once they have no classes.</p>
+      <h3 style="margin:18px 0 6px">School logo</h3>
+      <div class="row" style="gap:16px;align-items:center">
+        <div class="logo-preview">${logoUrl() ? `<img src="${esc(logoUrl())}" alt="School logo">` : `<span class="muted small">No logo</span>`}</div>
+        <div class="row"><label class="btn">${icon("upload")} ${logoUrl() ? "Replace logo" : "Upload logo"}<input type="file" id="logo-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden></label>
+          ${logoUrl() ? `<button class="btn ghost danger" id="logo-remove">Remove</button>` : ""}</div>
+      </div>
+      <p class="muted small" style="margin:6px 0 0">Shown in the menu and at the top of every receipt, invoice, report card, payslip, statement and printed page. PNG, JPG, GIF, WebP or SVG, up to 1 MB; a square or wide image with a transparent background prints best.</p>
       <h3 style="margin:18px 0 6px">Demo school</h3>
       <label class="check"><input type="checkbox" id="demo-login" ${p.demo ? "checked" : ""}> Demo accounts sign in without a password</label>
       <p class="muted small" style="margin:6px 0 0">For training and trying the system out with demo data only. Anyone who opens this school's address can then sign in as the administrator, bursar, teacher or parent demo account.</p>
@@ -65,6 +72,24 @@ export default async function (el) {
         <p><b>Secondary:</b> Forms 1-4 (ZIMSEC O Level in Form 4), then Lower and Upper Six (Forms 5-6, A Level).</p>
         <p><b>Promotion:</b> once a year after Term 3. Form 4 students continue to Lower Six only when selected on their O Level results; everyone else in Form 4 completes school.</p>
         <p class="muted" style="margin-bottom:0">Each section has its own grading scale (primary, O Level, A Level), editable under Grading scales.</p></div></div></div>`;
+    pane.querySelector("#logo-file").onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 1024 * 1024) return toast("The logo must be 1 MB or smaller", "error");
+      const data = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(new Error("The file could not be read"));
+        r.readAsDataURL(file);
+      });
+      try { await api.put("/school/logo", { data }); toast("Logo saved", "success"); await refreshMeta(); school(); }
+      catch (err) { handleError(err); }
+    };
+    pane.querySelector("#logo-remove")?.addEventListener("click", async () => {
+      if (!(await confirmDialog("Remove the school logo? Documents will print with the school name only.", { confirmText: "Remove", danger: true }))) return;
+      try { await api.del("/school/logo"); toast("Logo removed", "success"); await refreshMeta(); school(); }
+      catch (err) { handleError(err); }
+    });
     pane.querySelector("#demo-login").onchange = async (e) => {
       const on = e.target.checked;
       if (on && !(await confirmDialog("Allow anyone with this school's address to sign in to the demo accounts (including the administrator) without a password? Only do this for a school with demo data.", { title: "Passwordless demo sign-in", confirmText: "Allow", danger: true }))) { e.target.checked = false; return; }

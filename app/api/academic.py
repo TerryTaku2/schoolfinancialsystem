@@ -742,3 +742,59 @@ def update_school_profile():
     audit("update", "school", None, f"type {old} -> {new}")
     db.session.commit()
     return jsonify(structure.profile())
+
+
+# --------------------------------------------------------------------------- #
+# School logo
+# --------------------------------------------------------------------------- #
+LOGO_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"}
+LOGO_MAX_BYTES = 1024 * 1024
+
+
+@bp.get("/school/logo")
+@login_required
+def get_school_logo():
+    from flask import Response
+    from ..models import SchoolLogo
+    logo = SchoolLogo.query.first()
+    if not logo:
+        raise ApiError("No logo uploaded", 404)
+    resp = Response(logo.data, mimetype=logo.mime)
+    resp.headers["Cache-Control"] = "private, max-age=86400"  # the URL carries ?v=<updated_at>
+    if logo.mime == "image/svg+xml":
+        resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    return resp
+
+
+@bp.put("/school/logo")
+@permission_required("settings.manage")
+def upload_school_logo():
+    """Body: {"data": "data:image/png;base64,..."} — a data URL read in the browser."""
+    import base64
+    import binascii
+    from ..models import SchoolLogo
+    m = re.match(r"^data:([\w/+.-]+);base64,(.+)$", str(body().get("data") or ""), re.S)
+    if not m or m.group(1) not in LOGO_TYPES:
+        raise ApiError("Upload a PNG, JPG, GIF, WebP or SVG image", fields={"logo": "Unsupported file"})
+    try:
+        raw = base64.b64decode(m.group(2), validate=True)
+    except (binascii.Error, ValueError):
+        raise ApiError("The image could not be read", fields={"logo": "Invalid"})
+    if len(raw) > LOGO_MAX_BYTES:
+        raise ApiError("The logo must be 1 MB or smaller", fields={"logo": "Too large"})
+    logo = SchoolLogo.query.first() or SchoolLogo()
+    logo.mime, logo.data = m.group(1), raw
+    db.session.add(logo)
+    audit("update", "school", None, "logo uploaded")
+    db.session.commit()
+    return jsonify(logo_version=structure.logo_version())
+
+
+@bp.delete("/school/logo")
+@permission_required("settings.manage")
+def delete_school_logo():
+    from ..models import SchoolLogo
+    SchoolLogo.query.delete()
+    audit("delete", "school", None, "logo removed")
+    db.session.commit()
+    return jsonify(ok=True)

@@ -508,7 +508,8 @@ def delete_role(rid):
 @bp.get("/users")
 @permission_required("users.manage")
 def list_users():
-    return jsonify(items=[u.to_dict() for u in User.query.order_by(User.role, User.username)])
+    return jsonify(items=[u.to_dict() for u in User.query.order_by(User.reset_requested_at.is_(None), User.role,
+                                                                     User.username)])
 
 
 @bp.post("/users")
@@ -570,6 +571,9 @@ def update_user(uid):
     if data.get("password"):
         validate_password(data["password"])
         user.set_password(data["password"])
+        user.reset_requested_at = None
+        # A password chosen by someone else is temporary: the user picks their own at next sign-in.
+        user.must_change_password = True if user.id != current_user.id else None
     audit("update", "user", user.id, ", ".join(k for k in data if k != "password") +
           (" password reset" if data.get("password") else ""))
     db.session.commit()

@@ -152,7 +152,7 @@ def test_role_rules(app):
 
 def test_every_endpoint_has_a_permission_rule(app):
     """No API endpoint is left open by accident: each is public on purpose, needs login, or a permission."""
-    public = {"auth.login", "auth.find_school", "auth.demo_accounts", "auth.demo_login", "static"}
+    public = {"auth.login", "auth.find_school", "auth.demo_accounts", "auth.demo_login", "auth.forgot_password", "static"}
     for rule in app.url_map.iter_rules():
         ep = rule.endpoint
         if not rule.rule.startswith("/api/") or ep.startswith(("integration.", "platform.")) or ep in public:

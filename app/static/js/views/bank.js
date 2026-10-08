@@ -1,6 +1,6 @@
 // Bank reconciliation: statements, matching, bank-only items and the reconciliation statement.
 import { api } from "../api.js";
-import { badge, confirmDialog, esc, fmtDate, formModal, handleError, has, icon, modal, money, printModal, selectHtml, state, table, toast, today } from "../ui.js";
+import { badge, confirmDialog, docLogo, esc, fmtDate, formModal, handleError, has, icon, modal, money, printModal, selectHtml, state, table, toast, today } from "../ui.js";
 
 const signedMoney = (v, cur) => `<span style="color:${v < 0 ? "var(--bad)" : "inherit"}">${money(v, cur)}</span>`;
 
@@ -297,7 +297,7 @@ function printStatement(s) {
   const out = s.outstanding;
   const m = modal({ title: "Bank reconciliation statement", wide: true,
     body: `<div class="row no-print" style="justify-content:flex-end;margin-bottom:12px"><button class="btn" data-print>${icon("print")} Print</button></div>
-    <div class="doc"><div class="doc-head"><div><h2>${esc(state.meta.school)}</h2><div class="muted">Bank reconciliation statement</div></div>
+    <div class="doc"><div class="doc-head">${docLogo()}<div><h2>${esc(state.meta.school)}</h2><div class="muted">Bank reconciliation statement</div></div>
       <div style="text-align:right"><h2>${esc(s.account)}</h2><div class="muted">as at ${fmtDate(s.statement_date)}${s.reference ? ` · ${esc(s.reference)}` : ""}</div></div></div>
     <table><tbody>
       <tr><td>Balance per bank statement</td><td style="text-align:right">${m$(sm.closing)}</td></tr>

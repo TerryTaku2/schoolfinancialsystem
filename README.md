@@ -110,6 +110,15 @@ flask --app run adopt-school --code greenfield --name "Greenfield Academy" --dat
   - Someone who manages users can only grant permissions they hold themselves, and can't change their own.
   - Every change is written to the audit log.
 
+## Forgotten passwords
+
+No email is needed; whoever is one level up resets the password and the person then chooses their own.
+
+- **Staff, teachers and parents:** on the sign-in page, **Forgot password?** asks the school's administrators for a reset. They see it in the top bar and on **Users & Permissions**, check it's really that person, and use **Reset password** to set a temporary password.
+- **Temporary passwords:** any password set by someone else must be replaced at the next sign-in; nothing else works until the person chooses their own.
+- **School administrators:** the platform operator uses **Reset admin password** on the school in the platform console.
+- **The platform operator:** set `PLATFORM_ADMIN_RESET=1` and a new `PLATFORM_ADMIN_PASSWORD` (on Render: Environment), redeploy or restart, sign in, then delete `PLATFORM_ADMIN_RESET`.
+
 ## Multiple currencies
 
 A school works in its own currency (USD or ZWG, chosen when it is created) and can add any of the currencies used in Zimbabwe's multi-currency system: **ZWG, USD, ZAR, BWP, GBP, EUR, CNY, INR, JPY, AUD**, plus **ZMW** and **MZN** for schools near the borders. The administrator ticks them under **Settings → School → Currencies**. From then on, every money transaction asks which currency it is in, and **each amount is recorded exactly as it happened. Nothing is ever converted.**

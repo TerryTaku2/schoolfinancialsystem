@@ -50,6 +50,12 @@ export default async function (el) {
     el.querySelector("#actions").innerHTML = `<button class="btn primary" id="add">${icon("plus")} New user</button>`;
     pane.innerHTML = `<div class="notice" style="margin-bottom:16px">Teacher and parent logins are best created from the Staff and Guardians pages so they link to the right record. Administrators always have every permission.</div><div class="card"><div id="tbl"></div></div>`;
     const { items } = await api.get("/users");
+    const asked = items.filter((u) => u.reset_requested_at && u.active);
+    // Keep the top-bar reminder in step with the list.
+    const pill = document.querySelector(".topbar a.badge[href='#/users']");
+    if (pill && !asked.length) pill.remove();
+    else if (pill) pill.textContent = `${asked.length} password reset${asked.length > 1 ? "s" : ""} requested`;
+    if (asked.length) pane.insertAdjacentHTML("afterbegin", `<div class="notice warn" style="margin-bottom:16px"><b>Password reset requested</b> by ${asked.map((u) => `${esc(u.full_name)} (${esc(u.username)})`).join(", ")}. Check it's really them, then use <b>Reset password</b> and give them a temporary password; they choose their own when they sign in.</div>`);
     table(pane.querySelector("#tbl"), {
       rows: items,
       columns: [
@@ -59,13 +65,18 @@ export default async function (el) {
         { key: "permissions", label: "Can", sort: false, render: (u) => (u.role === "admin" ? '<span class="muted small">Everything</span>' : u.role === "parent" ? '<span class="muted small">Parent portal</span>'
           : `<span class="muted small">${u.permissions.length} permission${u.permissions.length === 1 ? "" : "s"}${u.role === "teacher" ? " + own classes" : ""}</span>`) },
         { key: "last_login", label: "Last login", render: (u) => fmtDateTime(u.last_login) },
-        { key: "active", label: "Status", render: (u) => badge(u.active ? "active" : "void", u.active ? "active" : "disabled") },
+        { key: "active", label: "Status", render: (u) => `${badge(u.active ? "active" : "void", u.active ? "active" : "disabled")}${u.reset_requested_at && u.active ? `<br>${badge("pending", "asked for reset")}` : ""}${u.must_change_password ? `<br><span class="muted small">temporary password</span>` : ""}` },
         { key: "id", label: "", sort: false, cls: "actions", render: (u) => `${u.role !== "admin" && u.role !== "parent" && u.id !== state.user.id ? `<button class="btn sm" data-perms="${u.id}">Permissions</button> ` : ""}<button class="btn sm" data-reset="${u.id}">Reset password</button> ${u.id === state.user.id ? "" : `<button class="btn sm ${u.active ? "danger" : ""}" data-toggle="${u.id}" data-active="${u.active}">${u.active ? "Disable" : "Enable"}</button>`}` },
       ],
     });
     pane.querySelectorAll("[data-perms]").forEach((b) => (b.onclick = () => editUser(items.find((u) => u.id === +b.dataset.perms))));
     pane.querySelectorAll("[data-reset]").forEach((b) => (b.onclick = async () => {
-      if (await formModal({ title: "Reset password", cols: 1, fields: [{ name: "password", label: "New password", type: "password", required: true, hint: "8+ characters, letters and numbers" }], onSubmit: (d) => api.put(`/users/${b.dataset.reset}`, d) })) toast("Password reset", "success");
+      const u = items.find((x) => x.id === +b.dataset.reset);
+      const self = u.id === state.user.id;
+      if (await formModal({ title: `Reset password · ${u.full_name}`, cols: 1,
+        intro: self ? "" : `<p style="margin-top:0" class="muted">Give ${esc(u.full_name)} this temporary password in person or by phone. They must choose their own password the next time they sign in.</p>`,
+        fields: [{ name: "password", label: self ? "New password" : "Temporary password", type: "password", required: true, hint: "8+ characters, letters and numbers" }],
+        onSubmit: (d) => api.put(`/users/${u.id}`, d) })) { toast(self ? "Password changed" : "Password reset; they'll choose a new one at sign-in", "success"); users(); }
     }));
     pane.querySelectorAll("[data-toggle]").forEach((b) => (b.onclick = async () => {
       const enable = b.dataset.active !== "true";

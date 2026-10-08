@@ -57,6 +57,29 @@ def login():
     return jsonify(user=user.to_dict())
 
 
+@bp.post("/auth/forgot")
+def forgot_password():
+    """"Forgot password?" on the sign-in page: tell the school's administrators.
+
+    There is no email, so an administrator resets the password (Users & Permissions) and gives the
+    user a temporary one, which they must change when they sign in. The answer is the same whether
+    or not the username exists, so it reveals nothing.
+    """
+    username = str(body().get("username") or "").strip().lower()
+    if not username:
+        raise ApiError("Enter your username", fields={"username": "Required"})
+    if _throttled("forgot:" + username):
+        raise ApiError("Too many requests. Try again in a few minutes.", 429)
+    _failed[_key("forgot:" + username)].append(time.time())
+    user = User.query.filter_by(username=username).first()
+    if user and user.active:
+        user.reset_requested_at = utcnow()
+        audit("reset_request", "user", user.id, "asked for a password reset from the sign-in page")
+        db.session.commit()
+    return jsonify(ok=True, message="If that username exists, your school's administrator has been asked to "
+                                    "reset your password. They will give you a temporary password.")
+
+
 @bp.post("/auth/find-school")
 def find_school():
     """Multi-school front page: which schools do these credentials sign in to?
@@ -141,7 +164,11 @@ def change_password():
     if not current_user.check_password(data["current_password"]):
         raise ApiError("Current password is incorrect", fields={"current_password": "Incorrect"})
     validate_password(data["new_password"])
+    if data["new_password"] == data["current_password"]:
+        raise ApiError("Choose a password different from the current one", fields={"new_password": "Unchanged"})
     current_user.set_password(data["new_password"])
+    current_user.must_change_password = None
+    current_user.reset_requested_at = None
     audit("password", "user", current_user.id)
     db.session.commit()
     return jsonify(ok=True)

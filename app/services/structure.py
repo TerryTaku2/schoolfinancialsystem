@@ -95,6 +95,13 @@ def school_name():
     return (sch.name if sch else None) or _setting("school_name") or current_app.config["SCHOOL_NAME"]
 
 
+def logo_version():
+    """A cache-busting token for the school's logo, or None when it has no logo."""
+    from ..models import SchoolLogo
+    ts = db.session.query(SchoolLogo.updated_at).limit(1).scalar()
+    return int(ts.timestamp()) if ts else None
+
+
 def currency():
     from ..tenancy import current_school
     sch = current_school()
@@ -134,7 +141,7 @@ def profile():
     rates = {c: fx.rate_dict(r) for c, r in fx.latest_rates().items()}
     return {"name": school_name(), "currency": currency(), "currencies": fx.enabled(), "dual_currency": fx.is_multi(),
             "currency_catalog": fx.catalog(), "rate_currencies": fx.rate_currencies(), "demo": is_demo(),
-            "rates": rates, "rate": rates.get("ZWG"), "school_type": t,
+            "logo_version": logo_version(), "rates": rates, "rate": rates.get("ZWG"), "school_type": t,
             "school_type_label": SCHOOL_TYPES[t], "sections": sections_for(t),
             "levels": [{"code": c, "label": LONG_LABEL[c], "order": ORDER[c], "section": SECTION[c]}
                        for c in codes_for(t)]}

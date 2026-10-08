@@ -70,6 +70,8 @@ class Config:
     MULTI_SCHOOL = os.environ.get("MULTI_SCHOOL", "").lower() in ("1", "true", "yes")
     # The list of schools and the platform operators' logins.
     # Defaults to DATABASE_URL when that is set (one PostgreSQL database for everything when hosted).
+    # Forgotten operator password: set PLATFORM_ADMIN_RESET=1 and a new PLATFORM_ADMIN_PASSWORD, restart, then remove it.
+    PLATFORM_ADMIN_RESET = os.environ.get("PLATFORM_ADMIN_RESET", "").lower() in ("1", "true", "yes")
     PLATFORM_DATABASE_URL = _db_url(os.environ.get("PLATFORM_DATABASE_URL")) or DATABASE_URL or \
         "sqlite:///" + os.path.join(BASE_DIR, "instance", "platform.db")
     # Where new schools' databases go: a PostgreSQL URL (one schema per school), or empty for
@@ -109,6 +111,7 @@ class TestConfig(Config):
     # Tests choose their own mode; a developer's .env must not switch them to multi-school.
     MULTI_SCHOOL = False
     PLATFORM_ADMIN_PASSWORD = ""
+    PLATFORM_ADMIN_RESET = False
     # TEST_DATABASE_URL runs the suite against PostgreSQL (as used in production) instead of SQLite.
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
     SECRET_KEY = "test"

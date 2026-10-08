@@ -12,6 +12,8 @@ const ROOT = document.querySelector('meta[name="app-root"]')?.content || "";
 
 let onUnauthorized = () => {};
 export function setUnauthorizedHandler(fn) { onUnauthorized = fn; }
+let onMustChange = () => {};
+export function setMustChangeHandler(fn) { onMustChange = fn; }
 
 async function request(method, url, data) {
   const opts = { method, headers: { "X-Requested-With": "SchoolMS" }, credentials: "same-origin" };
@@ -29,6 +31,7 @@ async function request(method, url, data) {
   try { payload = await res.json(); } catch { /* non-JSON */ }
   if (!res.ok) {
     if (res.status === 401 && !url.startsWith("/auth/login")) onUnauthorized();
+    if (res.status === 403 && payload?.must_change_password) onMustChange();
     throw new ApiError(payload?.error || `Request failed (${res.status})`, res.status, payload?.fields);
   }
   return payload;

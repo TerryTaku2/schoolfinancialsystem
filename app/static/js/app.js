@@ -1,6 +1,6 @@
 // App shell: authentication, permission-based navigation, hash router.
-import { api, setUnauthorizedHandler } from "./api.js";
-import { $, $$, esc, handleError, has, icon, initials, state, toast } from "./ui.js";
+import { api, setMustChangeHandler, setUnauthorizedHandler } from "./api.js";
+import { $, $$, docLogo, esc, fieldHtml, formModal, handleError, has, icon, initials, modal, readForm, schoolMark, showFieldErrors, state, toast } from "./ui.js";
 
 // Each menu item shows when show() is true: by permission (see services/permissions.py), or for teachers
 // (their own classes) and parents (their own children).
@@ -77,7 +77,14 @@ export async function refreshMeta() {
   state.meta = await api.get("/meta");
   const pill = $("#term-pill");
   if (pill) pill.textContent = state.meta.current_term ? state.meta.current_term.label : "No current term";
+  const mark = $("#sidebar .brand .logo");
+  if (mark) mark.outerHTML = schoolMark(SCHOOL);
+  const brand = $("#print-brand");
+  if (brand) brand.innerHTML = printBrand();
 }
+
+// Printed at the top of any page printed from the browser that isn't already a document with its own letterhead.
+const printBrand = () => `${docLogo()}<div><h2>${esc(state.meta?.school || SCHOOL)}</h2><div class="muted">${esc(document.querySelector("#view h1")?.textContent || "")}</div></div>`;
 
 // ---------------------------------------------------------------- login
 function renderLogin(message) {
@@ -92,6 +99,7 @@ function renderLogin(message) {
         <label class="field"><span>Password</span><input class="input" name="password" type="password" autocomplete="current-password" required></label>
         <label class="check"><input type="checkbox" name="remember"> Keep me signed in</label>
         <button class="btn primary" type="submit" style="height:40px">Sign in</button>
+        <button class="btn ghost sm" type="button" id="forgot" style="justify-self:center">Forgot password?</button>
       </div>
       <div class="demo" id="demo" hidden></div>
     </form>
@@ -111,6 +119,16 @@ function renderLogin(message) {
       } catch (err) { handleError(err); }
     }));
   }).catch(() => {});
+  $("#forgot").onclick = async () => {
+    const r = await formModal({
+      title: "Forgot your password?", cols: 1, submitText: "Ask for a reset",
+      intro: `<p style="margin-top:0">Enter your username. Your school's administrator will be asked to reset your password and give you a temporary one; you then choose your own when you sign in.</p>`,
+      values: { username: form.username.value },
+      fields: [{ name: "username", label: "Username", required: true }],
+      onSubmit: (d) => api.post("/auth/forgot", d),
+    });
+    if (r) modal({ title: "Request sent", body: `<p style="margin-top:0">${esc(r.message)}</p><p class="muted small" style="margin-bottom:0">Administrators who forgot their own password: ask the person who runs the system (the platform operator) to reset it.</p>`, actions: [{ label: "OK", cls: "primary" }] });
+  };
   form.onsubmit = async (e) => {
     e.preventDefault();
     const btn = form.querySelector('[type="submit"]');
@@ -143,7 +161,7 @@ function renderShell() {
   root.innerHTML = `
   <div class="shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand"><div class="logo">${esc(initials(SCHOOL))}</div><div><strong>${esc(SCHOOL)}</strong><span class="muted small">School Management</span></div></div>
+      <div class="brand">${schoolMark(SCHOOL)}<div><strong>${esc(SCHOOL)}</strong><span class="muted small">School Management</span></div></div>
       <nav aria-label="Main">${items.map((n) => n.group
         ? `<div class="nav-group">${esc(n.group)}</div>`
         : `<a class="nav-link" href="#/${n.route}" data-route="${n.route}">${icon(n.icon)}<span>${esc(n.label)}</span></a>`).join("")}</nav>
@@ -158,8 +176,10 @@ function renderShell() {
         <button class="btn ghost icon menu-btn" id="menu" aria-label="Open menu">${icon("menu")}</button>
         <span class="term-pill" id="term-pill">${esc(state.meta.current_term?.label || "No current term")}</span>
         <span class="spacer"></span>
+        ${state.meta.reset_requests ? `<a class="badge warn" href="#/users" title="People who used Forgot password on the sign-in page">${state.meta.reset_requests} password reset${state.meta.reset_requests > 1 ? "s" : ""} requested</a>` : ""}
         <button class="btn ghost icon" id="theme" title="Toggle dark mode" aria-label="Toggle dark mode">${icon("moon")}</button>
       </header>
+      <div class="print-brand" id="print-brand"></div>
       <main class="content" id="view" tabindex="-1"></main>
       <div class="backdrop" id="backdrop" aria-hidden="true"></div>
     </div>
@@ -210,6 +230,7 @@ async function route() {
     if (token !== renderToken) return;
     const h1 = host.querySelector("h1");
     document.title = `${h1 ? h1.textContent + " · " : ""}${SCHOOL}`;
+    $("#print-brand").innerHTML = printBrand();
     view.focus({ preventScroll: true });
   } catch (err) {
     if (token !== renderToken) return;
@@ -218,13 +239,51 @@ async function route() {
   }
 }
 
+// After a password reset: the user must replace the temporary password before anything else.
+function renderChangePassword() {
+  document.title = `Choose a new password · ${SCHOOL}`;
+  const fields = [
+    { name: "current_password", label: "Temporary password", type: "password", required: true, hint: "The one you were given" },
+    { name: "new_password", label: "New password", type: "password", required: true, hint: "At least 8 characters, mixing letters with numbers or symbols" },
+    { name: "confirm", label: "Confirm new password", type: "password", required: true },
+  ];
+  root.innerHTML = `
+  <div class="login-wrap">
+    <form class="login-card" id="pw-form" novalidate>
+      <div class="brand"><div class="logo">${esc(initials(SCHOOL))}</div><div><h1>Choose a new password</h1><div class="muted">Signed in as ${esc(state.user.username)}</div></div></div>
+      <div class="notice" style="margin-bottom:14px">Your password was reset. Choose your own password to continue; nobody else will know it.</div>
+      <div class="form">${fields.map((f) => fieldHtml(f)).join("")}
+        <button class="btn primary" type="submit" style="height:40px">Save and continue</button>
+        <button class="btn ghost sm" type="button" id="pw-out" style="justify-self:center">Sign out</button></div>
+    </form>
+  </div>`;
+  const form = $("#pw-form");
+  $("#pw-out").onclick = async () => { await api.post("/auth/logout").catch(() => {}); state.user = null; renderLogin(); };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const d = readForm(form, fields);
+    if (d.new_password !== d.confirm) return showFieldErrors(form, { fields: { confirm: "Passwords do not match" } });
+    try {
+      await api.post("/auth/change-password", { current_password: d.current_password, new_password: d.new_password });
+      state.user = { ...state.user, must_change_password: false };
+      toast("Password saved", "success");
+      await boot();
+    } catch (err) { showFieldErrors(form, err); toast(err.message, "error"); }
+  };
+}
+
 async function boot() {
+  if (state.user?.must_change_password) return renderChangePassword();
   await refreshMeta();
   renderShell();
   if (!location.hash) location.hash = "#/dashboard";
   else route();
 }
 
+// A reset while signed in: the server refuses other calls until a new password is chosen.
+setMustChangeHandler(() => {
+  if (state.user && !state.user.must_change_password) { state.user = { ...state.user, must_change_password: true }; renderChangePassword(); }
+});
 setUnauthorizedHandler(() => {
   if (state.user) {
     state.user = null;

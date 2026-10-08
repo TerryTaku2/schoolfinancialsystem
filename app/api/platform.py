@@ -26,7 +26,22 @@ _failed = defaultdict(deque)
 
 
 def bootstrap_admin(app):
-    """Create the first platform operator from PLATFORM_ADMIN_PASSWORD when there is none."""
+    """Create the first platform operator from PLATFORM_ADMIN_PASSWORD when there is none.
+
+    Forgotten operator password: set PLATFORM_ADMIN_RESET=1 with a new PLATFORM_ADMIN_PASSWORD and
+    restart; the operator's password is set to it. Remove PLATFORM_ADMIN_RESET afterwards.
+    """
+    if app.config.get("PLATFORM_ADMIN_RESET") and app.config.get("PLATFORM_ADMIN_PASSWORD"):
+        username = app.config["PLATFORM_ADMIN_USERNAME"].strip().lower()
+        op = PlatformAdmin.query.filter_by(username=username).first()
+        if op is None:
+            op = PlatformAdmin(username=username, full_name="Platform Administrator")
+            db.session.add(op)
+        op.set_password(app.config["PLATFORM_ADMIN_PASSWORD"])
+        db.session.commit()
+        app.logger.warning("Platform operator %s's password was reset from PLATFORM_ADMIN_PASSWORD. "
+                           "Remove PLATFORM_ADMIN_RESET now.", username)
+        return
     if PlatformAdmin.query.first():
         return
     password = app.config.get("PLATFORM_ADMIN_PASSWORD")
@@ -231,6 +246,53 @@ def create_school():
         demo=bool(data.get("demo")), background=bool(data.get("demo")),
         students_per_class=DEMO_STUDENTS_PER_CLASS if data.get("demo") else None)
     return jsonify(school_dict(school)), 201
+
+
+def _school_or_404(sid):
+    s = db.session.get(School, sid)
+    if not s:
+        raise ApiError("School not found", 404)
+    if s.slug in SETUP:
+        raise ApiError("This school is still being set up", 409)
+    return s
+
+
+@bp.get("/platform/api/schools/<int:sid>/admins")
+def school_admins(sid):
+    """The school's administrator accounts, for resetting a forgotten password."""
+    _require_operator()
+    s = _school_or_404(sid)
+    with use_school(s):
+        return jsonify(items=[{"username": u.username, "full_name": u.full_name, "active": u.active,
+                               "last_login": u.last_login.isoformat() if u.last_login else None,
+                               "reset_requested": bool(u.reset_requested_at)}
+                              for u in User.query.filter_by(role="admin").order_by(User.username)])
+
+
+@bp.post("/platform/api/schools/<int:sid>/reset-password")
+def reset_school_admin_password(sid):
+    """A school administrator forgot their password: the operator sets a temporary one.
+    Only administrator accounts; everyone else is reset by the school's own administrators."""
+    from ..utils import audit
+    op_name = _require_operator().username  # read now: the session is reset when switching schools
+    s = _school_or_404(sid)
+    slug = s.slug
+    data = body()
+    require(data, "username", "password")
+    validate_password(str(data["password"]))
+    with use_school(s):
+        user = User.query.filter_by(username=str(data["username"]).strip().lower(), role="admin").first()
+        if user is None:
+            raise ApiError("No administrator with that username in this school", 404, fields={"username": "Not found"})
+        user.set_password(str(data["password"]))
+        user.must_change_password = True
+        user.reset_requested_at = None
+        user.active = True
+        audit("update", "user", user.id, f"password reset by platform operator {op_name}")
+        db.session.commit()
+        username = user.username
+    current_app.logger.info("Operator %s reset %s's password at %s", op_name, username, slug)
+    return jsonify(ok=True, username=username)
 
 
 @bp.put("/platform/api/schools/<int:sid>")

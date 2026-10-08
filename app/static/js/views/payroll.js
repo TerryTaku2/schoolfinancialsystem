@@ -1,6 +1,6 @@
 // Payroll: monthly runs (ZIMRA PAYE, AIDS levy, NSSA, ZIMDEF), payslips, remittances, returns and tax tables.
 import { api, ApiError } from "../api.js";
-import { badge, baseCurrency, confirmDialog, currencies, downloadCSV, esc, fmtDate, formModal, handleError, has, icon, isDual, modal, money, moneyList, printModal, selectHtml, showFieldErrors, state, table, toast, today } from "../ui.js";
+import { badge, baseCurrency, confirmDialog, currencies, docLogo, downloadCSV, esc, fmtDate, formModal, handleError, has, icon, isDual, modal, money, moneyList, printModal, selectHtml, showFieldErrors, state, table, toast, today } from "../ui.js";
 
 // Totals per currency of a run (what is actually paid and withheld in each), e.g. "US$9,500 · ZiG 26,000".
 const perCurrency = (run, key) => moneyList((run.by_currency || []).map((x) => ({ currency: x.currency, amount: x[key] })));
@@ -181,7 +181,7 @@ export default async function (el, [tabParam, idParam]) {
       const m = modal({
         title: `Payslip · ${p.name}`, wide: true,
         body: `<div class="row no-print" style="justify-content:flex-end;margin-bottom:12px"><button class="btn" data-print>${icon("print")} Print</button></div>
-        <div class="doc"><div class="doc-head"><div><h2>${esc(state.meta.school)}</h2><div class="muted">Payslip for ${esc(monthLabel(p.period))}</div></div>
+        <div class="doc"><div class="doc-head">${docLogo()}<div><h2>${esc(state.meta.school)}</h2><div class="muted">Payslip for ${esc(monthLabel(p.period))}</div></div>
           <div style="text-align:right"><h2>PAYSLIP</h2><div class="muted">${esc(p.run_no)} · paid ${fmtDate(p.pay_date)}</div></div></div>
         <table><tr><th>Employee</th><td>${esc(p.name)} (${esc(p.staff_no)})</td><th>Position</th><td>${esc(p.position)}${p.department ? `, ${esc(p.department)}` : ""}</td></tr>
           <tr><th>National ID</th><td>${esc(p.national_id || "—")}</td><th>ZIMRA BP no.</th><td>${esc(p.tax_number || "—")}</td></tr>

@@ -378,7 +378,7 @@ def meta():
     term = current_term()
     terms = Term.query.order_by(Term.start_date.desc()).all()
     return jsonify(
-        school=school_name(), currency=currency(), profile=structure.profile(),
+        school=school_name(), logo_version=structure.logo_version(), currency=currency(), profile=structure.profile(),
         current_term=({"id": term.id, "label": term.label, "start_date": iso(term.start_date),
                        "end_date": iso(term.end_date)} if term else None),
         terms=[{"id": t.id, "label": t.label, "start_date": iso(t.start_date), "end_date": iso(t.end_date)} for t in terms],
@@ -388,4 +388,14 @@ def meta():
         pass_mark=current_app.config["PASS_MARK"],
         attendance_threshold=current_app.config["ATTENDANCE_THRESHOLD"],
         today=date.today().isoformat(),
+        reset_requests=_reset_requests(),
     )
+
+
+def _reset_requests():
+    from flask_login import current_user
+    from ..models import User
+    from ..services import permissions
+    if not current_user.is_authenticated or "users.manage" not in permissions.permissions_for(current_user):
+        return 0
+    return User.query.filter(User.reset_requested_at.isnot(None), User.active.is_(True)).count()
