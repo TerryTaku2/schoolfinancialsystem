@@ -1,0 +1,31 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repository.
+# Creates the web service and its PostgreSQL database, then deploys.
+services:
+  - type: web
+    name: school-management
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --worker-class gthread --workers 1 --threads 8 --bind 0.0.0.0:$PORT --timeout 120
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: MULTI_SCHOOL
+        value: "1"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PLATFORM_ADMIN_USERNAME
+        value: platform
+      - key: PLATFORM_ADMIN_PASSWORD
+        sync: false          # you type it in the Render dashboard; never stored in the repository
+      - key: DATABASE_URL
+        fromDatabase:
+          name: school-db
+          property: connectionString
+
+databases:
+  - name: school-db
+    plan: free
+    databaseName: school
+    user: school

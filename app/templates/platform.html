@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Platform console · School Management</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Cpath d='M6 13l10-5 10 5-10 5z' fill='white'/%3E%3Cpath d='M10 16v5c3 2 9 2 12 0v-5' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+  <meta name="app-root" content="{{ request.script_root }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script>
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <noscript>This application requires JavaScript.</noscript>
+  <script type="module" src="{{ url_for('static', filename='js/platform.js') }}"></script>
+</body>
+</html>

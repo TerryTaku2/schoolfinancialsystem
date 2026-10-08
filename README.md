@@ -311,3 +311,18 @@ tests/                 business-rule and accounting tests
 ```
 #   s c h o o l f i n a n c i a l s y s t e m  
  
+## Deploying on Render
+
+The repository includes a Render Blueprint (`render.yaml`) that creates the web service and a PostgreSQL database.
+
+1. Push this project to GitHub. `.env` and `instance/` are gitignored, so passwords and local data stay on your machine.
+2. In Render, go to **New → Blueprint**, pick the repository and enter a value for `PLATFORM_ADMIN_PASSWORD` when asked.
+3. Once it is live, sign in at `https://<your-app>.onrender.com/platform/` and create the schools there.
+
+If you set the service up by hand instead:
+
+- **Build command:** `pip install -r requirements.txt`
+- **Start command:** `gunicorn wsgi:app --worker-class gthread --workers 1 --threads 8 --bind 0.0.0.0:$PORT --timeout 120`
+- **Environment variables:** `MULTI_SCHOOL=1`, `SECRET_KEY` (a long random value), `PLATFORM_ADMIN_PASSWORD`, `DATABASE_URL` (the database's *Internal* connection string) and `PYTHON_VERSION=3.13.5`.
+
+With a PostgreSQL `DATABASE_URL`, the platform tables and every school (each in its own schema) live in that one database. Render's disk is wiped on each deploy, so nothing is kept in local files. Render's free PostgreSQL database expires after a trial period, so use a paid plan for real school data.
