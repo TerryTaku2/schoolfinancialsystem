@@ -5,12 +5,12 @@ services:
     name: school-management
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app --worker-class gthread --workers 1 --threads 8 --bind 0.0.0.0:$PORT --timeout 120
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: python -m gunicorn wsgi:app --worker-class gthread --workers 1 --threads 8 --bind 0.0.0.0:$PORT --timeout 120
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
-        value: "3.13.5"
+        value: "3.14.6"
       - key: MULTI_SCHOOL
         value: "1"
       - key: SECRET_KEY

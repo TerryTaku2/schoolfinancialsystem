@@ -321,8 +321,8 @@ The repository includes a Render Blueprint (`render.yaml`) that creates the web 
 
 If you set the service up by hand instead:
 
-- **Build command:** `pip install -r requirements.txt`
-- **Start command:** `gunicorn wsgi:app --worker-class gthread --workers 1 --threads 8 --bind 0.0.0.0:$PORT --timeout 120`
-- **Environment variables:** `MULTI_SCHOOL=1`, `SECRET_KEY` (a long random value), `PLATFORM_ADMIN_PASSWORD`, `DATABASE_URL` (the database's *Internal* connection string) and `PYTHON_VERSION=3.13.5`.
+- **Build command:** `python -m pip install -r requirements.txt`
+- **Start command:** `python -m gunicorn wsgi:app --worker-class gthread --workers 1 --threads 8 --bind 0.0.0.0:$PORT --timeout 120`
+- **Environment variables:** `MULTI_SCHOOL=1`, `SECRET_KEY` (a long random value), `PLATFORM_ADMIN_PASSWORD`, `DATABASE_URL` (the database's *Internal* connection string) and `PYTHON_VERSION=3.14.6`.
 
 With a PostgreSQL `DATABASE_URL`, the platform tables and every school (each in its own schema) live in that one database. Render's disk is wiped on each deploy, so nothing is kept in local files. Render's free PostgreSQL database expires after a trial period, so use a paid plan for real school data.
