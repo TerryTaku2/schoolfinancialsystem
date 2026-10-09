@@ -95,6 +95,7 @@ const BADGE = {
   unpaid: "info", excused: "info", graduate: "info", graduated: "info",
   overdue: "bad", absent: "bad", rejected: "bad", void: "plain", left: "plain", blocked: "bad",
   transferred: "plain", withdrawn: "plain", draft: "warn", disposed: "plain", written_off: "plain", reversed: "plain",
+  info: "info", plain: "plain",
 };
 export function badge(status, label) {
   if (!status) return "";

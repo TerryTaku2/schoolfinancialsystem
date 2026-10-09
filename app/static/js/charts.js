@@ -62,7 +62,7 @@ function yAxis(max, h, pad, w, fmt) {
 }
 
 /** Grouped or single-series column chart. series: [{name, color, values:[]}] */
-export function columnChart(el, { labels, series, format = (v) => v, height = 240 }) {
+export function columnChart(el, { labels, series, format = (v) => v, axisFormat = format, height = 240 }) {
   mount(el, (w) => {
     const pad = { t: 16, r: 12, b: 28, l: 56 };
     const h = height - pad.t - pad.b;
@@ -72,6 +72,8 @@ export function columnChart(el, { labels, series, format = (v) => v, height = 24
     const colW = Math.min(24, (band * 0.7 - (n - 1) * 2) / n);
     const groupW = colW * n + (n - 1) * 2;
     let marks = "", hits = "", xl = "";
+    // Label every n-th column when they'd collide (e.g. 12 months on a phone).
+    const every = Math.max(1, Math.ceil(labels.length / Math.max(2, Math.floor((w - pad.l - pad.r) / 46))));
     labels.forEach((lab, i) => {
       const gx = pad.l + band * i + (band - groupW) / 2;
       series.forEach((s, k) => {
@@ -81,12 +83,12 @@ export function columnChart(el, { labels, series, format = (v) => v, height = 24
       });
       const tipRows = series.map((s) => `${n > 1 ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:6px"></span>${esc(s.name)}: ` : ""}${esc(format(s.values[i] || 0))}`).join("<br>");
       const top = pad.t + h - (Math.max(...series.map((s) => s.values[i] || 0)) / max) * h;
-      hits += `<rect class="hit" x="${pad.l + band * i}" y="${pad.t}" width="${band}" height="${h}" data-idx="${i}" data-x="${pad.l + band * (i + 0.5)}" data-y="${top}" data-tip="<b>${esc(lab)}</b>${tipRows}"/>`;
-      xl += `<text class="axis-text" x="${pad.l + band * (i + 0.5)}" y="${height - 8}" text-anchor="middle">${esc(lab)}</text>`;
+      hits += `<rect class="hit" x="${pad.l + band * i}" y="${pad.t}" width="${band}" height="${h}" data-idx="${i}" data-x="${pad.l + band * (i + 0.5)}" data-y="${top}" data-tip="${esc(`<b>${esc(lab)}</b>${tipRows}`)}"/>`;
+      if ((labels.length - 1 - i) % every === 0) xl += `<text class="axis-text" x="${pad.l + band * (i + 0.5)}" y="${height - 8}" text-anchor="middle">${esc(lab)}</text>`;
     });
     const legend = n > 1 ? `<div class="legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>` : "";
     return `${legend}<svg width="${w}" height="${height}" viewBox="0 0 ${w} ${height}" role="img" aria-label="${esc(series.map((s) => s.name).join(", "))} by period">
-      ${yAxis(max, h, pad, w, format)}<line class="grid-line" x1="${pad.l}" x2="${w - pad.r}" y1="${pad.t + h}" y2="${pad.t + h}" style="stroke:var(--border)"/>
+      ${yAxis(max, h, pad, w, axisFormat)}<line class="grid-line" x1="${pad.l}" x2="${w - pad.r}" y1="${pad.t + h}" y2="${pad.t + h}" style="stroke:var(--border)"/>
       ${marks}${xl}${hits}</svg>`;
   });
 }

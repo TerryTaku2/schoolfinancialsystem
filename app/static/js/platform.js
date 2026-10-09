@@ -2,6 +2,7 @@
 import { ApiError } from "./api.js";
 import { $, badge, confirmDialog, esc, fmtDate, formModal, handleError, icon, table, toast } from "./ui.js";
 import { billingTab, editSchoolBilling, paymentSettingsTab } from "./platform-billing.js";
+import { dashboardTab } from "./platform-dashboard.js";
 
 const ROOT = document.querySelector('meta[name="app-root"]')?.content || "";
 const root = $("#root");
@@ -43,19 +44,21 @@ async function boot() {
   root.innerHTML = `<div class="content" style="max-width:1200px;margin:0 auto">
     <div class="page-head"><div><h1>Platform console</h1><p>Schools, subscriptions and payments. Signed in as ${esc(me.user.full_name)}.</p></div>
       <div class="page-actions"><button class="btn" id="out">Sign out</button></div></div>
-    <div class="tabs" role="tablist"><button role="tab" data-tab="schools" class="active">Schools</button><button role="tab" data-tab="billing">Billing</button><button role="tab" data-tab="pay">Payment settings</button></div>
-    <div id="tab-schools"><div class="row" style="justify-content:flex-end;margin-bottom:12px"><button class="btn primary" id="add">${icon("plus")} New school</button></div>
+    <div class="tabs" role="tablist"><button role="tab" data-tab="dash" class="active">Dashboard</button><button role="tab" data-tab="schools">Schools</button><button role="tab" data-tab="billing">Billing</button><button role="tab" data-tab="pay">Payment settings</button></div>
+    <div id="tab-dash"></div>
+    <div id="tab-schools" hidden><div class="row" style="justify-content:flex-end;margin-bottom:12px"><button class="btn primary" id="add">${icon("plus")} New school</button></div>
       <div class="card"><div id="tbl"></div></div></div>
     <div id="tab-billing" hidden></div><div id="tab-pay" hidden></div></div>`;
   $("#out").onclick = async () => { await call("POST", "/logout").catch(() => {}); renderLogin(); };
   $("#add").onclick = () => newSchool(me);
   root.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => {
     root.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("active", x === b));
-    for (const k of ["schools", "billing", "pay"]) $(`#tab-${k}`).hidden = k !== b.dataset.tab;
+    for (const k of ["dash", "schools", "billing", "pay"]) $(`#tab-${k}`).hidden = k !== b.dataset.tab;
     const tab = b.dataset.tab;
-    (tab === "schools" ? load() : tab === "billing" ? billingTab($("#tab-billing"), call) : paymentSettingsTab($("#tab-pay"), call)).catch(handleError);
+    (tab === "dash" ? dashboardTab($("#tab-dash"), call) : tab === "schools" ? load() : tab === "billing" ? billingTab($("#tab-billing"), call)
+      : paymentSettingsTab($("#tab-pay"), call)).catch(handleError);
   }));
-  await load();
+  await dashboardTab($("#tab-dash"), call);
 }
 
 let poll = null;

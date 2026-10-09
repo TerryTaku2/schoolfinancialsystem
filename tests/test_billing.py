@@ -178,3 +178,24 @@ def test_existing_platform_database_is_upgraded(tmp_path):
     insp = inspect(create_engine(url))
     assert {"billing_rate_cents", "contact_phone", "billing_free"} <= {c["name"] for c in insp.get_columns("school")}
     assert insp.has_table("subscription_invoice") and insp.has_table("subscription_payment")
+
+
+def test_operator_dashboard(env):
+    app, ops, ids, _ = env
+    assert app.test_client().get("/platform/api/dashboard").status_code == 401
+    d = ops.get("/platform/api/dashboard?refresh=1").json
+    k = d["kpi"]
+    assert k["schools_total"] == 3 and k["schools_active"] == 3 and k["schools_free"] == 1
+    assert k["learners"] == 120                                    # active learners across schools
+    assert k["collected_year"] == 140.0                             # 120 (confirmed EcoCash) + 20 cash
+    assert k["outstanding"] == 30.0 and k["overdue"] == 30.0        # Small School, overdue
+    assert k["forecast_next_term"] == 170.0                         # big 120 + small minimum 50; pilot free
+    schools = {s["slug"]: s for s in d["schools"]}
+    assert schools["big"]["learners"] == 120 and schools["big"]["subscription"] == "paid up"
+    assert schools["small"]["subscription"] == "overdue" and schools["pilot"]["subscription"] == "free"
+    assert schools["big"]["health"] in ("active", "new") and schools["big"]["storage_bytes"] > 0
+    assert any(a["kind"] == "overdue" and "Small School" in a["text"] for a in d["attention"])
+    assert len(d["revenue_by_month"]["values"]) == 12 and d["growth"]["values"][-1] == 3
+    assert {p["period"] for p in d["periods"]} >= {"Term 1 2027"}
+    # Cached until refreshed.
+    assert ops.get("/platform/api/dashboard").json["generated_at"] == d["generated_at"]

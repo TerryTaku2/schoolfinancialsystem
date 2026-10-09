@@ -487,3 +487,13 @@ def billing_reminder(iid):
     b = _billing()
     return jsonify(text=b.reminder_text(inv), whatsapp=b.whatsapp_link(inv), phone=inv.school.contact_phone,
                    email=inv.school.contact_email)
+
+
+# --------------------------------------------------------------------------- #
+# Operator dashboard: revenue, schools, usage and health across the platform
+# --------------------------------------------------------------------------- #
+@bp.get("/platform/api/dashboard")
+def operations_dashboard():
+    from ..services import operations
+    _require_operator()
+    return jsonify(operations.dashboard(refresh=request.args.get("refresh") == "1"))
