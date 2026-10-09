@@ -1,8 +1,10 @@
 """Library: catalogue, copies, the issue/return desk, overdue books and fines."""
+import io
+import os
 from datetime import date
 
-from flask import Blueprint, jsonify, request
-from flask_login import login_required
+from flask import Blueprint, current_app, jsonify, request
+from flask_login import current_user, login_required
 from sqlalchemy import or_
 
 from .. import db
@@ -381,3 +383,131 @@ def student_loans(sid):
         access.ensure_student_access(student)
     loans = Loan.query.filter_by(student_id=sid).order_by(Loan.returned_on.isnot(None), Loan.issued_on.desc()).limit(50)
     return jsonify(items=[lib.loan_dict(l) for l in loans], **lib.borrower_dict(student=student))
+
+
+# --------------------------------------------------------------------------- #
+# Digital library: PDFs uploaded by teachers
+# --------------------------------------------------------------------------- #
+def _resource_fields(r, form):
+    from ..models import RESOURCE_AUDIENCES, RESOURCE_KINDS
+    r.title = clean_str(form.get("title"), 200)
+    if not r.title:
+        raise ApiError("Give the file a title", fields={"title": "Required"})
+    kind = form.get("kind") or "Other"
+    if kind not in RESOURCE_KINDS:
+        raise ApiError("Invalid type", fields={"kind": "Invalid"})
+    r.kind = kind
+    sid = parse_int(form.get("subject_id"), "subject_id", required=False)
+    r.subject_id = get_or_404(Subject, sid, "Subject").id if sid else None
+    level = form.get("level") or None
+    if level and level not in structure.CODES:
+        raise ApiError("Invalid level", fields={"level": "Invalid"})
+    r.level = level
+    r.exam_board = clean_str(form.get("exam_board"), 30)
+    r.year = parse_int(form.get("year"), "year", required=False, minimum=1950, maximum=date.today().year + 1)
+    r.paper = clean_str(form.get("paper"), 40)
+    r.description = clean_str(form.get("description"), 500)
+    audience = form.get("audience") or ("staff" if kind == "Marking scheme" else "everyone")
+    if audience not in RESOURCE_AUDIENCES:
+        raise ApiError("Invalid audience", fields={"audience": "Invalid"})
+    r.audience = audience
+
+
+@bp.get("/elibrary")
+@login_required
+def list_resources():
+    from ..models import RESOURCE_KINDS, Resource
+    from ..services import resources as res
+    q = res.visible_query()
+    if request.args.get("q"):
+        like = f"%{request.args['q'].strip()}%"
+        q = q.filter(or_(Resource.title.ilike(like), Resource.description.ilike(like), Resource.paper.ilike(like),
+                         Resource.exam_board.ilike(like)))
+    for key in ("kind", "level"):
+        if request.args.get(key):
+            q = q.filter(getattr(Resource, key) == request.args[key])
+    if request.args.get("subject_id"):
+        q = q.filter(Resource.subject_id == parse_int(request.args["subject_id"], "subject_id"))
+    if request.args.get("year"):
+        q = q.filter(Resource.year == parse_int(request.args["year"], "year"))
+    if request.args.get("mine") == "1":
+        q = q.filter(Resource.uploaded_by == current_user.id)
+    rows = q.order_by(Resource.created_at.desc(), Resource.id.desc()).limit(500).all()
+    return jsonify(items=[res.resource_dict(r) for r in rows], kinds=RESOURCE_KINDS,
+                   subjects=[{"id": s.id, "name": s.name} for s in Subject.query.order_by(Subject.name)],
+                   levels=[{"code": c, "label": structure.LONG_LABEL[c]} for c in structure.codes_for(structure.school_type())],
+                   can_upload=permissions.has("library.upload"), staff=res.is_staff(),
+                   max_mb=int(current_app.config.get("MAX_UPLOAD_MB", 25)))
+
+
+@bp.post("/elibrary")
+@permission_required("library.upload")
+def upload_resource():
+    from ..models import Resource
+    from ..services import resources as res
+    form = request.form
+    if form.get("rights") not in ("1", "true", "on", "yes"):
+        raise ApiError("Confirm that the school may share this file (e.g. ZIMSEC past papers, your own notes, "
+                       "or a textbook the school has the right to distribute)", fields={"rights": "Required"})
+    data = res.read_upload(request.files.get("file"))
+    r = Resource(uploaded_by=current_user.id,
+                 file_name=clean_str(os.path.basename(request.files["file"].filename), 200) or "document.pdf")
+    _resource_fields(r, form)
+    if not r.file_name.lower().endswith(".pdf"):
+        r.file_name += ".pdf"
+    db.session.add(r)
+    res.store(r, data)
+    dup = Resource.query.filter(Resource.sha256 == r.sha256, Resource.id != r.id).first()
+    audit("upload", "resource", r.id, f"{r.kind}: {r.title} ({r.size_bytes // 1024} KB)")
+    db.session.commit()
+    out = res.resource_dict(r)
+    if dup:
+        out["duplicate_of"] = dup.title
+    return jsonify(out), 201
+
+
+@bp.get("/elibrary/<int:rid>/file")
+@login_required
+def resource_file(rid):
+    """The PDF, to read in the browser (or ?download=1 to save it)."""
+    from flask import send_file
+    from ..services import resources as res
+    r = res.visible_query().filter_by(id=rid).first()
+    if r is None:
+        raise ApiError("File not found", 404)
+    data = res.load(r)
+    r.downloads += 1
+    db.session.commit()
+    resp = send_file(io.BytesIO(data), mimetype="application/pdf", as_attachment=request.args.get("download") == "1",
+                     download_name=r.file_name, max_age=0)
+    resp.headers["Content-Security-Policy"] = "sandbox"  # an uploaded file never runs as part of the app
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
+
+
+@bp.put("/elibrary/<int:rid>")
+@login_required
+def update_resource(rid):
+    from ..models import Resource
+    from ..services import resources as res
+    r = get_or_404(Resource, rid, "File")
+    if not res.can_edit(r):
+        raise ApiError("Only the person who uploaded this file (or a library approver) can change it", 403)
+    _resource_fields(r, body())
+    audit("update", "resource", r.id, r.title)
+    db.session.commit()
+    return jsonify(res.resource_dict(r))
+
+
+@bp.delete("/elibrary/<int:rid>")
+@login_required
+def delete_resource(rid):
+    from ..models import Resource
+    from ..services import resources as res
+    r = get_or_404(Resource, rid, "File")
+    if not res.can_edit(r):
+        raise ApiError("Only the person who uploaded this file (or a library approver) can delete it", 403)
+    audit("delete", "resource", r.id, r.title)
+    res.remove(r)
+    db.session.commit()
+    return jsonify(ok=True)

@@ -120,6 +120,15 @@ flask --app run adopt-school --code greenfield --name "Greenfield Academy" --dat
 - **Fines:** optional, per day late, in the school currency. A lost book is charged at the copy's replacement cost. A student's fine can be **added to their fees invoice** for the term (it shows on their statement, is paid like any fee and is booked to Sundry Income), marked paid, or waived with a reason.
 - **Who sees what:** permissions are library view, manage (issue, return, add books) and approve (waive fines, delete books, change rules). Teachers and bursars can browse the library by default; create a "Librarian" role with Library manage for the librarian. Parents see their children's books on the student page.
 
+## Digital library
+
+**Digital Library** in the menu holds PDF textbooks, past exam papers, marking schemes, notes and worksheets, tagged by subject, level, exam board, year and paper.
+
+- **Teachers upload.** Uploading needs the "library upload" permission, which teachers have by default. The uploader confirms the school may share the file. Only real PDFs are accepted, up to `MAX_UPLOAD_MB` (25 MB by default).
+- **Everyone reads.** Staff and parents can search, open the PDF in the browser or download it. Files marked **Staff only** (marking schemes by default) are never shown to parents.
+- **Changing and removing files:** the uploader can edit or delete their own files, and library approvers can delete any file.
+- **Storage:** files are kept in the school's own database, which works on Render and is included in database backups. Mind the database size: Render's free database is 1 GB. For large collections, add a Render Disk and set `UPLOADS_DIR` to its path, for example `/var/data/uploads`; files are then stored there, one folder per school. Identical files are stored only once.
+
 ## Forgotten passwords
 
 No email is needed; whoever is one level up resets the password and the person then chooses their own.

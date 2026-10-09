@@ -59,7 +59,8 @@ CATALOG = [
     ("Banking", "banking.approve", "Complete or reopen a bank reconciliation"),
     ("Library", "library.view", "Browse the library catalogue, loans and overdue books"),
     ("Library", "library.manage", "Add books, issue and return them, record fines"),
-    ("Library", "library.approve", "Waive fines, delete books, change library rules"),
+    ("Library", "library.approve", "Waive fines, delete books, change library rules, remove any uploaded file"),
+    ("Library", "library.upload", "Upload PDF textbooks, past exam papers and notes to the digital library"),
     ("Reports", "reports.view", "Fee, debtor and cash flow reports"),
     ("School", "announcements.manage", "Post and delete announcements"),
     ("School", "users.manage", "User accounts, roles and permissions"),
@@ -78,7 +79,7 @@ DEFAULTS = {
                "assets.view", "assets.manage", "accounting.view", "accounting.manage", "reports.view",
                "banking.view", "banking.manage", "library.view"],
     # Teachers work with their own classes (row-level rules); they can also browse the library.
-    "teacher": ["library.view"],
+    "teacher": ["library.view", "library.upload"],
 }
 ROLE_LABEL = {"admin": "Administrator", "bursar": "Bursar", "teacher": "Teacher", "parent": "Parent"}
 
@@ -107,7 +108,8 @@ def validate(perms, field="permissions"):
 # Permissions added to the built-in roles by later versions, applied once to existing schools
 # (so a permission an administrator removed on purpose is never put back).
 ADDED_DEFAULTS = {2: {"bursar": ["banking.view", "banking.manage"]},
-                  3: {"teacher": ["library.view"], "bursar": ["library.view"]}}
+                  3: {"teacher": ["library.view"], "bursar": ["library.view"]},
+                  4: {"teacher": ["library.upload"]}}
 DEFAULTS_VERSION = max(ADDED_DEFAULTS)
 
 

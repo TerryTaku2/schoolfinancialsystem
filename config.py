@@ -94,7 +94,12 @@ class Config:
     CONTACT_PHONE = os.environ.get("CONTACT_PHONE", "")
     CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "")
     PRICING_NOTE = os.environ.get("PRICING_NOTE", "")
-    DEMO_SCHOOL = os.environ.get("DEMO_SCHOOL", "demo")  # code of the demo school linked from the front page
+    DEMO_SCHOOL = os.environ.get("DEMO_SCHOOL", "demo")
+    # Digital library uploads (PDFs). Stored in the database unless UPLOADS_DIR names a folder
+    # (e.g. a Render Disk mounted at /var/data/uploads).
+    MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "25"))
+    UPLOADS_DIR = os.environ.get("UPLOADS_DIR", "")
+    MAX_CONTENT_LENGTH = (MAX_UPLOAD_MB + 2) * 1024 * 1024  # code of the demo school linked from the front page
     CURRENCY = os.environ.get("CURRENCY", "USD")
     # Minimum attendance % before a student is flagged as at-risk.
     ATTENDANCE_THRESHOLD = 85.0

@@ -29,10 +29,10 @@ export default async function (el, [classParam]) {
         <div class="sub">${r.recorded ? "Already recorded — changes will update the register." : "Not yet recorded. Everyone starts as present; mark the exceptions."}</div></div>
         ${r.can_edit ? `<div class="row"><button class="btn sm" id="all-present">All present</button><button class="btn primary" id="save">Save register</button></div>` : `<span class="badge plain">View only</span>`}</div>
       <div class="toolbar small muted" id="counts">${counts()}</div>
-      <div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Student</th><th>Status</th><th>Remark</th></tr></thead><tbody>
+      <div class="table-wrap"><table class="table att-table"><thead><tr><th>#</th><th>Student</th><th>Status</th><th>Remark</th></tr></thead><tbody>
       ${r.roster.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${esc(s.name)}</b><br><span class="muted small">${esc(s.admission_no)}</span></td>
         <td><div class="seg" role="group" aria-label="Status for ${esc(s.name)}">${STATUSES.map((st) => `<button type="button" data-sid="${s.student_id}" data-v="${st}" aria-pressed="${marks[s.student_id].status === st}" ${r.can_edit ? "" : "disabled"}>${st[0].toUpperCase() + st.slice(1)}</button>`).join("")}</div></td>
-        <td><input class="input" data-remark="${s.student_id}" value="${esc(marks[s.student_id].remark)}" placeholder="Optional" ${r.can_edit ? "" : "disabled"} maxlength="120"></td></tr>`).join("") || `<tr><td colspan="4" class="empty">No active students in this class.</td></tr>`}
+        <td><input class="input" data-remark="${s.student_id}" value="${esc(marks[s.student_id].remark)}" placeholder="Remark (optional)" ${r.can_edit ? "" : "disabled"} maxlength="120"></td></tr>`).join("") || `<tr><td colspan="4" class="empty">No active students in this class.</td></tr>`}
       </tbody></table></div></div>`;
     pane.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => {
       marks[b.dataset.sid].status = b.dataset.v;

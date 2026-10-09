@@ -10,9 +10,11 @@ def register_blueprints(app):
     from .payroll import bp as payroll_bp
     from .banking import bp as banking_bp
     from .library import bp as library_bp
+    from .subscription import bp as subscription_bp
 
     for bp in (auth_bp, people_bp, academic_bp, finance_bp, dashboard_bp, accounting_bp,
-               integration_bp, assets_bp, payroll_bp, banking_bp, library_bp):
+               integration_bp, assets_bp, payroll_bp, banking_bp, library_bp,
+               subscription_bp):
         app.register_blueprint(bp, url_prefix="/api")
 
     from .platform import bp as platform_bp

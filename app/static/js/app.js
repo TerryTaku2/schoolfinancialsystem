@@ -22,6 +22,7 @@ const NAV = [
   { route: "exams", label: "Exams & Marks", icon: "exams", show: () => has("academics.view", "marks.manage") || teacher() },
   { route: "results", label: "Results", icon: "results", show: () => has("results.view") || teacher() },
   { route: "library", label: "Library", icon: "library", show: () => has("library.view") },
+  { route: "elibrary", label: "Digital Library", icon: "pdf", show: () => true },
   { group: "Finance" },
   { route: "fees", label: "Fee Structure", icon: "fees", show: () => has("fees.view") },
   { route: "invoices", label: "Invoices", icon: "invoices", show: () => has("fees.view") || parent() },
@@ -40,6 +41,7 @@ const NAV = [
   { route: "users", label: "Users & Permissions", icon: "users", show: () => has("users.manage") },
   { route: "audit", label: "Audit Log", icon: "audit", show: () => has("audit.view") },
   { route: "settings", label: "Settings", icon: "settings", show: () => has("settings.manage", "academics.manage", "promotion.approve") },
+  { route: "subscription", label: "Subscription", icon: "invoices", show: () => !!state.subscription?.enabled },
 ];
 
 const VIEWS = {
@@ -58,6 +60,8 @@ const VIEWS = {
   payments: () => import("./views/payments.js"),
   rates: () => import("./views/rates.js"),
   library: () => import("./views/library.js"),
+  subscription: () => import("./views/subscription.js"),
+  elibrary: () => import("./views/elibrary.js"),
   expenses: () => import("./views/expenses.js"),
   payroll: () => import("./views/payroll.js"),
   assets: () => import("./views/assets.js"),
@@ -112,7 +116,7 @@ function renderLogin(message) {
     if (!d.enabled || !d.accounts.length) return;
     const box = $("#demo");
     box.hidden = false;
-    box.innerHTML = `<b>Demo school</b> · sign in without a password as<br>${d.accounts.map((a) => `<button type="button" data-u="${esc(a.username)}">${esc(a.label)}</button>`).join(" · ")}`;
+    box.innerHTML = `<b>Demo school</b> · sign in without a password as<br>${d.accounts.map((a) => `<button type="button" data-u="${esc(a.username)}">${esc(a.label)}</button>`).join("")}`;
     $$("button", box).forEach((b) => (b.onclick = async () => {
       try {
         const { user } = await api.post("/auth/demo-login", { username: b.dataset.u });
@@ -182,6 +186,7 @@ function renderShell() {
         <button class="btn ghost icon" id="theme" title="Toggle dark mode" aria-label="Toggle dark mode">${icon("moon")}</button>
       </header>
       <div class="print-brand" id="print-brand"></div>
+      <div id="sub-banner"></div>
       <main class="content" id="view" tabindex="-1"></main>
       <div class="backdrop" id="backdrop" aria-hidden="true"></div>
     </div>
@@ -274,10 +279,32 @@ function renderChangePassword() {
   };
 }
 
+// Subscription notice for the school's administrators and bursars (multi-school hosting).
+export async function refreshSubscription() {
+  try { state.subscription = await api.get("/subscription"); } catch { state.subscription = null; }
+  renderSubscriptionBanner();
+}
+
+function renderSubscriptionBanner() {
+  const box = $("#sub-banner");
+  const due = state.subscription?.notice || [];
+  if (!box) return;
+  if (!due.length) { box.innerHTML = ""; return; }
+  const pay = state.subscription.pay;
+  box.innerHTML = due.map((inv) => {
+    const late = inv.status === "overdue";
+    const how = pay.ecocash_number ? ` Pay by EcoCash to <b>${esc(pay.ecocash_number)}</b>${pay.ecocash_name ? ` (${esc(pay.ecocash_name)})` : ""}, reference <b>${esc(inv.number)}</b>${pay.cash_instructions ? ", or in cash" : ""}.` : "";
+    return `<div class="notice ${late ? "bad" : "warn"} sub-notice"><b>${late ? "Subscription overdue" : "Subscription due"}:</b> ${esc(inv.period)}, ${esc(inv.currency)} ${Number(inv.balance).toFixed(2)} ${late ? "was due" : "due"} ${esc(new Date(inv.due_on + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))}.${how}
+      ${inv.pending ? ` <i>Payment reported, awaiting confirmation.</i>` : ""} <a href="#/subscription">${inv.pending ? "Details" : "Details / I've paid"}</a></div>`;
+  }).join("");
+}
+
 async function boot() {
   if (state.user?.must_change_password) return renderChangePassword();
   await refreshMeta();
+  if (state.user?.role !== "parent") await refreshSubscription();
   renderShell();
+  renderSubscriptionBanner();
   if (!location.hash) location.hash = "#/dashboard";
   else route();
 }

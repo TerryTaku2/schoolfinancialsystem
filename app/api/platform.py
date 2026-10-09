@@ -84,7 +84,11 @@ def school_dict(s):
             "school_type_label": structure.SCHOOL_TYPES.get(s.school_type, s.school_type),
             "currency": s.currency, "status": s.status, "created_at": s.created_at.isoformat(),
             "preparing": bool(setup and setup["state"] == "preparing"),
-            "url": f"{root}/s/{s.slug}/", "storage": "PostgreSQL schema " + s.db_schema if s.db_schema else "SQLite"}
+            "url": f"{root}/s/{s.slug}/", "storage": "PostgreSQL schema " + s.db_schema if s.db_schema else "SQLite",
+            "billing": {"rate": s.billing_rate_cents / 100 if s.billing_rate_cents is not None else None,
+                        "minimum": s.billing_minimum_cents / 100 if s.billing_minimum_cents is not None else None,
+                        "free": bool(s.billing_free), "contact_name": s.contact_name, "contact_phone": s.contact_phone,
+                        "contact_email": s.contact_email}}
 
 
 @bp.get("/platform/")
@@ -312,3 +316,174 @@ def update_school(sid):
         s.status = data["status"]
     db.session.commit()
     return jsonify(school_dict(s))
+
+
+# --------------------------------------------------------------------------- #
+# Subscriptions: billing schools, recording EcoCash/cash payments, reminders
+# --------------------------------------------------------------------------- #
+def _billing():
+    from ..services import billing
+    return billing
+
+
+@bp.get("/platform/api/billing/settings")
+def billing_settings():
+    _require_operator()
+    return jsonify(settings=_billing().settings())
+
+
+@bp.put("/platform/api/billing/settings")
+def save_billing_settings():
+    _require_operator()
+    s = _billing().save_settings(body())
+    db.session.commit()
+    return jsonify(settings=s)
+
+
+@bp.put("/platform/api/schools/<int:sid>/billing")
+def school_billing(sid):
+    from ..utils import to_cents
+    _require_operator()
+    s = db.session.get(School, sid)
+    if not s:
+        raise ApiError("School not found", 404)
+    data = body()
+    for field, attr in (("rate", "billing_rate_cents"), ("minimum", "billing_minimum_cents")):
+        if field in data:
+            v = data[field]
+            setattr(s, attr, None if v in (None, "") else to_cents(v, field, allow_zero=True))
+    if "free" in data:
+        s.billing_free = bool(data["free"]) or None
+    s.contact_name = clean_str(data.get("contact_name", s.contact_name), 120)
+    s.contact_phone = clean_str(data.get("contact_phone", s.contact_phone), 30)
+    s.contact_email = clean_str(data.get("contact_email", s.contact_email), 120)
+    db.session.commit()
+    return jsonify(school_dict(s))
+
+
+@bp.get("/platform/api/billing/invoices")
+def billing_invoices():
+    from datetime import date
+    from ..models import SubscriptionInvoice
+    from ..utils import money
+    _require_operator()
+    b = _billing()
+    q = SubscriptionInvoice.query
+    if request.args.get("school_id"):
+        q = q.filter_by(school_id=int(request.args["school_id"]))
+    if request.args.get("period"):
+        q = q.filter_by(period=request.args["period"])
+    rows = q.order_by(SubscriptionInvoice.due_on.desc(), SubscriptionInvoice.id.desc()).all()
+    status = request.args.get("status", "open")
+    if status == "open":
+        rows = [i for i in rows if i.status in ("unpaid", "partial", "overdue") or any(p.status == "pending" for p in i.payments)]
+    elif status != "all":
+        rows = [i for i in rows if i.status == status]
+    everything = SubscriptionInvoice.query.filter_by(void=False).all()
+    this_year = [i for i in everything if i.issued_on.year == date.today().year]
+    totals = {"billed": money(sum(i.amount_cents for i in this_year)),
+              "collected": money(sum(i.paid_cents for i in this_year)),
+              "outstanding": money(sum(max(0, i.amount_cents - i.paid_cents) for i in everything)),
+              "overdue": sum(1 for i in everything if i.status == "overdue"),
+              "pending": sum(1 for i in everything for p in i.payments if p.status == "pending"),
+              "currency": b.settings()["currency"]}
+    periods = sorted({i.period for i in everything}, reverse=True)
+    return jsonify(items=[b.invoice_dict(i) for i in rows], totals=totals, periods=periods)
+
+
+@bp.post("/platform/api/billing/run")
+def billing_run():
+    from ..utils import parse_date
+    _require_operator()
+    data = body()
+    require(data, "period", "due_on")
+    due = parse_date(data["due_on"], "due_on")
+    created, skipped = _billing().bill_period(data["period"], due, data.get("school_ids") or None)
+    db.session.commit()
+    return jsonify(created=[_billing().invoice_dict(i, with_payments=False) for i in created], skipped=skipped)
+
+
+@bp.post("/platform/api/billing/invoices")
+def billing_one_invoice():
+    """Bill one school, optionally with a set amount (a negotiated price, a setup fee...)."""
+    from ..utils import parse_date, parse_int, to_cents
+    _require_operator()
+    data = body()
+    require(data, "school_id", "period", "due_on")
+    b = _billing()
+    sid = parse_int(data["school_id"], "school_id")
+    s = db.session.get(School, sid)
+    if not s:
+        raise ApiError("School not found", 404)
+    learners = parse_int(data.get("learners"), "learners", required=False, minimum=0)
+    if learners is None:
+        learners = b.count_learners(s)  # resets the session: reload the school afterwards
+        s = db.session.get(School, sid)
+    amount = to_cents(data["amount"], "amount", allow_zero=True) if data.get("amount") not in (None, "") else None
+    inv = b.create_invoice(s, data["period"], parse_date(data["due_on"], "due_on"), learners, amount,
+                           clean_str(data.get("notes"), 200))
+    db.session.commit()
+    return jsonify(b.invoice_dict(inv)), 201
+
+
+def _invoice(iid):
+    from ..models import SubscriptionInvoice
+    inv = db.session.get(SubscriptionInvoice, iid)
+    if not inv:
+        raise ApiError("Invoice not found", 404)
+    return inv
+
+
+@bp.post("/platform/api/billing/invoices/<int:iid>/payments")
+def billing_record_payment(iid):
+    from ..utils import parse_date, to_cents
+    _require_operator()
+    data = body()
+    require(data, "amount", "method")
+    inv = _invoice(iid)
+    _billing().record_payment(inv, to_cents(data["amount"]), data["method"], data.get("reference"),
+                              parse_date(data.get("paid_on"), "paid_on", required=False),
+                              note=clean_str(data.get("note"), 200))
+    db.session.commit()
+    return jsonify(_billing().invoice_dict(inv)), 201
+
+
+@bp.post("/platform/api/billing/payments/<int:pid>/<action>")
+def billing_review_payment(pid, action):
+    from ..models import SubscriptionPayment
+    _require_operator()
+    if action not in ("confirm", "reject"):
+        raise ApiError("Action must be confirm or reject", 404)
+    p = db.session.get(SubscriptionPayment, pid)
+    if not p:
+        raise ApiError("Payment not found", 404)
+    if p.status != "pending":
+        raise ApiError("This payment has already been reviewed", 409)
+    p.status = "confirmed" if action == "confirm" else "rejected"
+    if action == "reject":
+        p.note = clean_str(body().get("reason"), 200) or p.note
+    db.session.commit()
+    return jsonify(_billing().invoice_dict(p.invoice))
+
+
+@bp.post("/platform/api/billing/invoices/<int:iid>/void")
+def billing_void(iid):
+    _require_operator()
+    inv = _invoice(iid)
+    reason = clean_str(body().get("reason"), 200)
+    if not reason:
+        raise ApiError("Give a reason", fields={"reason": "Required"})
+    if any(p.status == "confirmed" for p in inv.payments):
+        raise ApiError("This invoice has payments, so it can't be voided", 409)
+    inv.void, inv.void_reason = True, reason
+    db.session.commit()
+    return jsonify(_billing().invoice_dict(inv))
+
+
+@bp.get("/platform/api/billing/invoices/<int:iid>/reminder")
+def billing_reminder(iid):
+    _require_operator()
+    inv = _invoice(iid)
+    b = _billing()
+    return jsonify(text=b.reminder_text(inv), whatsapp=b.whatsapp_link(inv), phone=inv.school.contact_phone,
+                   email=inv.school.contact_email)

@@ -1,6 +1,7 @@
 // Platform console: operators create, rename and suspend schools (multi-school mode).
 import { ApiError } from "./api.js";
 import { $, badge, confirmDialog, esc, fmtDate, formModal, handleError, icon, table, toast } from "./ui.js";
+import { billingTab, editSchoolBilling, paymentSettingsTab } from "./platform-billing.js";
 
 const ROOT = document.querySelector('meta[name="app-root"]')?.content || "";
 const root = $("#root");
@@ -40,11 +41,20 @@ async function boot() {
   try { me = await call("GET", "/me"); } catch (err) { return renderLogin(err.status === 401 ? null : err.message); }
   document.title = "Platform console · School Management";
   root.innerHTML = `<div class="content" style="max-width:1200px;margin:0 auto">
-    <div class="page-head"><div><h1>Schools</h1><p>Each school has its own database, users and address. Signed in as ${esc(me.user.full_name)}.</p></div>
-      <div class="page-actions"><button class="btn" id="out">Sign out</button><button class="btn primary" id="add">${icon("plus")} New school</button></div></div>
-    <div class="card"><div id="tbl"></div></div></div>`;
+    <div class="page-head"><div><h1>Platform console</h1><p>Schools, subscriptions and payments. Signed in as ${esc(me.user.full_name)}.</p></div>
+      <div class="page-actions"><button class="btn" id="out">Sign out</button></div></div>
+    <div class="tabs" role="tablist"><button role="tab" data-tab="schools" class="active">Schools</button><button role="tab" data-tab="billing">Billing</button><button role="tab" data-tab="pay">Payment settings</button></div>
+    <div id="tab-schools"><div class="row" style="justify-content:flex-end;margin-bottom:12px"><button class="btn primary" id="add">${icon("plus")} New school</button></div>
+      <div class="card"><div id="tbl"></div></div></div>
+    <div id="tab-billing" hidden></div><div id="tab-pay" hidden></div></div>`;
   $("#out").onclick = async () => { await call("POST", "/logout").catch(() => {}); renderLogin(); };
   $("#add").onclick = () => newSchool(me);
+  root.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => {
+    root.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("active", x === b));
+    for (const k of ["schools", "billing", "pay"]) $(`#tab-${k}`).hidden = k !== b.dataset.tab;
+    const tab = b.dataset.tab;
+    (tab === "schools" ? load() : tab === "billing" ? billingTab($("#tab-billing"), call) : paymentSettingsTab($("#tab-pay"), call)).catch(handleError);
+  }));
   await load();
 }
 
@@ -67,13 +77,20 @@ async function load() {
       { key: "storage", label: "Database" },
       { key: "created_at", label: "Created", render: (s) => fmtDate(s.created_at) },
       { key: "status", label: "Status", render: (s) => s.preparing ? badge("pending", "Preparing demo data…") : badge(s.status === "active" ? "active" : "blocked", s.status) },
-      { key: "id", label: "", sort: false, cls: "actions", render: (s) => s.preparing ? `<span class="muted small">Opens when ready</span>` : `<button class="btn sm" data-rename="${s.id}">Rename</button> <button class="btn sm" data-pw="${s.id}">Reset admin password</button> <button class="btn sm ${s.status === "active" ? "danger" : ""}" data-status="${s.id}">${s.status === "active" ? "Suspend" : "Reactivate"}</button>` },
+      { key: "id", label: "", sort: false, cls: "actions", render: (s) => s.preparing ? `<span class="muted small">Opens when ready</span>` : `<button class="btn sm" data-rename="${s.id}">Rename</button> <button class="btn sm" data-bill="${s.id}">Billing</button> <button class="btn sm" data-pw="${s.id}">Reset admin password</button> <button class="btn sm ${s.status === "active" ? "danger" : ""}" data-status="${s.id}">${s.status === "active" ? "Suspend" : "Reactivate"}</button>` },
     ],
   });
   $("#tbl").querySelectorAll("[data-rename]").forEach((b) => (b.onclick = async () => {
     const s = r.items.find((x) => x.id === +b.dataset.rename);
     if (await formModal({ title: `Rename ${s.name}`, cols: 1, values: s, fields: [{ name: "name", label: "School name", required: true }],
       onSubmit: (d) => call("PUT", `/schools/${s.id}`, d) })) { toast("Renamed", "success"); load(); }
+  }));
+  $("#tbl").querySelectorAll("[data-bill]").forEach((b) => (b.onclick = async () => {
+    const s = r.items.find((x) => x.id === +b.dataset.bill);
+    try {
+      const { settings } = await call("GET", "/billing/settings");
+      if (await editSchoolBilling(s, call, settings)) { toast("Billing details saved", "success"); load(); }
+    } catch (err) { handleError(err); }
   }));
   $("#tbl").querySelectorAll("[data-pw]").forEach((b) => (b.onclick = async () => {
     const s = r.items.find((x) => x.id === +b.dataset.pw);

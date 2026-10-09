@@ -20,7 +20,7 @@ def _sqlite_pragmas(dbapi_conn, _record):
         cur.close()
 
 
-def _add_missing_columns(engine):
+def _add_missing_columns(engine, tables=None):
     """Tiny forward-only migration: add new nullable columns to existing tables.
 
     create_all() creates new tables but never alters existing ones, so databases
@@ -28,7 +28,7 @@ def _add_missing_columns(engine):
     """
     insp = inspect(engine)
     with engine.begin() as conn:
-        for table in db.metadata.sorted_tables:
+        for table in tables or db.metadata.sorted_tables:
             if not insp.has_table(table.name):
                 continue
             existing = {c["name"] for c in insp.get_columns(table.name)}
@@ -253,6 +253,8 @@ def create_app(config_object="config.Config"):
     with app.app_context():
         if multi:
             db.create_all(bind_key="platform")
+            # New columns on platform tables (e.g. billing details on School).
+            _add_missing_columns(db.engines["platform"], db.metadatas["platform"].sorted_tables)
             from .api.platform import bootstrap_admin
             bootstrap_admin(app)
         else:

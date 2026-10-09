@@ -881,6 +881,14 @@ class School(db.Model):
     db_schema = db.Column(db.String(63))  # PostgreSQL schema holding this school's tables
     status = db.Column(db.String(10), nullable=False, default="active")
     created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    # Subscription: price per learner per term and the minimum per term (cents, in the billing
+    # currency); empty means the console's default price. billing_free: not billed (e.g. a pilot).
+    billing_rate_cents = db.Column(db.Integer)
+    billing_minimum_cents = db.Column(db.Integer)
+    billing_free = db.Column(db.Boolean)
+    contact_name = db.Column(db.String(120))
+    contact_phone = db.Column(db.String(30))
+    contact_email = db.Column(db.String(120))
 
     __table_args__ = (CheckConstraint(f"status IN {SCHOOL_STATUSES}", name="ck_school_status"),)
 
@@ -1087,3 +1095,122 @@ class Loan(TimestampMixin, db.Model):
     @property
     def is_open(self):
         return self.returned_on is None and not self.lost
+
+
+# --------------------------------------------------------------------------- #
+# Digital library (PDF textbooks, past exam papers, notes)
+# --------------------------------------------------------------------------- #
+RESOURCE_KINDS = ("Textbook", "Past exam paper", "Marking scheme", "Notes", "Worksheet", "Other")
+RESOURCE_AUDIENCES = ("everyone", "staff")
+
+
+class Resource(TimestampMixin, db.Model):
+    """A PDF in the digital library. The file itself is in ResourceBlob (database storage) or in
+    the uploads folder (disk storage), found by `storage` and `storage_key`."""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False, default="Other")
+    subject_id = db.Column(db.Integer, db.ForeignKey("subject.id"), index=True)
+    level = db.Column(db.String(10), index=True)  # grade/form code (G7, F4...), optional
+    exam_board = db.Column(db.String(30))  # ZIMSEC, Cambridge...
+    year = db.Column(db.Integer)
+    paper = db.Column(db.String(40))  # e.g. "Paper 1", "November session"
+    description = db.Column(db.String(500))
+    # everyone: all signed-in users including parents; staff: not parents (e.g. marking schemes)
+    audience = db.Column(db.String(10), nullable=False, default="everyone")
+    file_name = db.Column(db.String(200), nullable=False)
+    size_bytes = db.Column(db.Integer, nullable=False)
+    sha256 = db.Column(db.String(64), nullable=False, index=True)
+    storage = db.Column(db.String(10), nullable=False, default="db")  # db | disk
+    storage_key = db.Column(db.String(200))
+    downloads = db.Column(db.Integer, nullable=False, default=0)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+
+    subject = db.relationship("Subject")
+    uploader = db.relationship("User")
+
+    __table_args__ = (CheckConstraint(f"kind IN {RESOURCE_KINDS}", name="ck_resource_kind"),
+                      CheckConstraint(f"audience IN {RESOURCE_AUDIENCES}", name="ck_resource_audience"))
+
+
+class ResourceBlob(db.Model):
+    """File contents for database storage, kept apart so listing resources never loads them."""
+    resource_id = db.Column(db.Integer, db.ForeignKey("resource.id", ondelete="CASCADE"), primary_key=True)
+    data = db.Column(db.LargeBinary, nullable=False)
+
+
+# --------------------------------------------------------------------------- #
+# Subscriptions (platform database): what each school owes the operator
+# --------------------------------------------------------------------------- #
+SUBSCRIPTION_METHODS = ("ecocash", "cash", "bank")
+
+
+class PlatformSetting(db.Model):
+    __bind_key__ = "platform"
+    key = db.Column(db.String(40), primary_key=True)
+    value = db.Column(db.String(500))
+
+
+class SubscriptionInvoice(db.Model):
+    """A school's subscription for one term (or any period the operator bills)."""
+    __bind_key__ = "platform"
+    id = db.Column(db.Integer, primary_key=True)
+    school_id = db.Column(db.Integer, db.ForeignKey("school.id"), nullable=False, index=True)
+    period = db.Column(db.String(40), nullable=False)  # e.g. "Term 1 2027"
+    issued_on = db.Column(db.Date, nullable=False, default=date.today)
+    due_on = db.Column(db.Date, nullable=False)
+    learners = db.Column(db.Integer, nullable=False, default=0)
+    rate_cents = db.Column(db.Integer, nullable=False, default=0)
+    amount_cents = db.Column(db.Integer, nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default="USD")
+    notes = db.Column(db.String(200))
+    void = db.Column(db.Boolean, nullable=False, default=False)
+    void_reason = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+
+    school = db.relationship("School")
+    payments = db.relationship("SubscriptionPayment", back_populates="invoice", order_by="SubscriptionPayment.id")
+
+    __table_args__ = (UniqueConstraint("school_id", "period", name="uq_subscription_school_period"),
+                      CheckConstraint("amount_cents >= 0", name="ck_subscription_amount"))
+
+    @property
+    def number(self):
+        return f"SUB-{self.id:05d}"
+
+    @property
+    def paid_cents(self):
+        return sum(p.amount_cents for p in self.payments if p.status == "confirmed")
+
+    @property
+    def status(self):
+        if self.void:
+            return "void"
+        paid = self.paid_cents
+        if paid >= self.amount_cents:
+            return "paid"
+        if self.due_on < date.today():
+            return "overdue"
+        return "partial" if paid else "unpaid"
+
+
+class SubscriptionPayment(db.Model):
+    """Money received for a subscription. Recorded by the operator (confirmed), or reported by the
+    school after paying by EcoCash (pending until the operator confirms it)."""
+    __bind_key__ = "platform"
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey("subscription_invoice.id"), nullable=False, index=True)
+    amount_cents = db.Column(db.Integer, nullable=False)
+    method = db.Column(db.String(10), nullable=False)
+    reference = db.Column(db.String(60))  # EcoCash transaction ID, receipt number...
+    paid_on = db.Column(db.Date, nullable=False, default=date.today)
+    status = db.Column(db.String(10), nullable=False, default="confirmed")  # pending | confirmed | rejected
+    reported_by = db.Column(db.String(120))  # school user who reported it
+    note = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+
+    invoice = db.relationship("SubscriptionInvoice", back_populates="payments")
+
+    __table_args__ = (CheckConstraint("amount_cents > 0", name="ck_subscription_payment_amount"),
+                      CheckConstraint(f"method IN {SUBSCRIPTION_METHODS}", name="ck_subscription_method"),
+                      CheckConstraint("status IN ('pending', 'confirmed', 'rejected')", name="ck_subscription_payment_status"))

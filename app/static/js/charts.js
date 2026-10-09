@@ -109,7 +109,9 @@ export function lineChart(el, { labels, values, format = (v) => v, height = 220,
       if (p) dots += `<circle data-mark="${i}" cx="${p[0]}" cy="${p[1]}" r="4" style="fill:${color};stroke:var(--surface);stroke-width:2"/>`;
       const x = pad.l + step * i;
       hits += `<rect class="hit" x="${x - step / 2}" y="${pad.t}" width="${Math.max(step, 16)}" height="${h}" data-idx="${i}" data-x="${x}" data-y="${p ? p[1] : pad.t + h}" data-tip="<b>${esc(labels[i])}</b>${esc(name ? name + ": " : "")}${values[i] === null ? "No data" : esc(format(values[i]))}"/>`;
-      if (i % every === 0 || i === labels.length - 1) xl += `<text class="axis-text" x="${x}" y="${height - 8}" text-anchor="middle">${esc(labels[i])}</text>`;
+      // Every n-th date, plus the last one; drop a regular label that would collide with the last.
+      const lastIdx = labels.length - 1;
+      if (i === lastIdx || (i % every === 0 && lastIdx - i >= Math.ceil(every * 0.75))) xl += `<text class="axis-text" x="${x}" y="${height - 8}" text-anchor="middle">${esc(labels[i])}</text>`;
     });
     const last = [...pts].reverse().find(Boolean);
     const lastV = [...values].reverse().find((v) => v !== null);
